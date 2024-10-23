@@ -1,0 +1,89 @@
+import json
+from abc import ABC, abstractmethod
+from functools import cached_property
+from pathlib import Path
+
+from cryptography.fernet import Fernet, InvalidToken
+
+
+class Vault(ABC):
+
+    def __init__(self, password: str)->None:
+        self.password = password
+
+    @cached_property
+    def cipher(self)->Fernet:
+        key = self._derive_key_from_password()
+        return Fernet(key)
+
+    def _derive_key_from_password(self)->bytes:
+        return Fernet.generate_key()
+
+    def decrypt(self, ciphertext: bytes)->bytes:
+        return self.cipher.decrypt(ciphertext)
+
+    def encrypt(self, plaintext: bytes)->bytes:
+        return self.cipher.encrypt(plaintext)
+
+    @abstractmethod
+    def get(self, name: str)->str|None:
+        pass
+
+    @abstractmethod
+    def set(self, name: str, value: str)->None:
+        pass
+
+    @abstractmethod
+    def delete(self, name: str)->None:
+        pass
+
+
+class LocalVault(Vault):
+
+    def __init__(self, password: str, file: Path)->None:
+        super().__init__(password)
+        self.file = file
+
+    def setup_local_vault(self)->None:
+        with open(self.file, "wb") as f:
+            secrets = self.encrypt(json.dumps({}).encode("utf-8"))
+            f.write(secrets)
+
+    def get(self, name: str)->str|None:
+        # Once we have the CLI we might consider migrating the exception handling
+        # to there.
+        # Right now the issue is if you open an empty file and attempt to decrypt
+        # the empty (bytes) string b"" then the decryption algorithm will know it
+        # is not valid and will raise an InvalidToken exception.
+        # The strategy right now is to write an empty secrets object that has been
+        # encrypted with the correct key.
+        with open(self.file, "rb") as f:
+            try:
+                secrets = self.decrypt(f.read())
+            except InvalidToken:
+                self.setup_vault()
+                return None
+        secrets = json.loads(secrets.decode("utf-8"))
+        return secrets.get(name)
+
+    def set(self, name: str, value: str)->None:
+        with open(self.file, "rwb") as f:
+            try:
+                secrets = self.decrypt(f.read())
+                secrets = json.loads(secrets.decode("utf-8"))
+            except InvalidToken:
+                secrets = {}
+            secrets[name] = value
+            f.write(self.encrypt(json.dumps(secrets).encode("utf-8")))
+
+    def delete(self, name: str)->None:
+        with open(self.file, "rwb") as f:
+            try:
+                secrets = self.decrypt(f.read())
+            except InvalidToken:
+                return
+            secrets = json.loads(secrets.decode("utf-8"))
+            if name not in secrets:
+                return
+            del secrets[name]
+            f.write(self.encrypt(json.dumps(secrets).encode("utf-8")))
