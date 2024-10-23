@@ -14,8 +14,7 @@ def vault(tmp_path_factory: pytest.TempPathFactory):
 
 
 @pytest.mark.parametrize(
-    "plaintext",
-    [b"plaintext", b"what a string", b'{"pickles": "rule"}']
+    "plaintext", [b"plaintext", b"what a string", b'{"pickles": "rule"}']
 )
 def test_encrypt_decrypt(plaintext: bytes, vault: Vault):
     assert plaintext == vault.decrypt(vault.encrypt(plaintext))
@@ -27,7 +26,7 @@ def test_encrypt_decrypt(plaintext: bytes, vault: Vault):
         ("login1", "password1"),
         ("login2", "password2!xjbopajpoiabpoijweg"),
         ("ajapdfipjwe", "pebpjqefvp92!$T$!))"),
-    ]
+    ],
 )
 def test_set_get_delete(name: str, value: str, vault: Vault):
     vault.set(name, value)
