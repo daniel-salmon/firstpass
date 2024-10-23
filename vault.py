@@ -49,7 +49,7 @@ class LocalVault(Vault):
             secrets = self.encrypt(json.dumps({}).encode("utf-8"))
             f.write(secrets)
 
-    def get(self, name: str)->str|None:
+    def fetch_secrets(self)->dict:
         # Once we have the CLI we might consider migrating the exception handling
         # to there.
         # Right now the issue is if you open an empty file and attempt to decrypt
@@ -60,30 +60,27 @@ class LocalVault(Vault):
         with open(self.file, "rb") as f:
             try:
                 secrets = self.decrypt(f.read())
-            except InvalidToken:
-                self.setup_vault()
-                return None
-        secrets = json.loads(secrets.decode("utf-8"))
-        return secrets.get(name)
-
-    def set(self, name: str, value: str)->None:
-        with open(self.file, "rwb") as f:
-            try:
-                secrets = self.decrypt(f.read())
                 secrets = json.loads(secrets.decode("utf-8"))
             except InvalidToken:
+                self.setup_local_vault()
                 secrets = {}
-            secrets[name] = value
+        return secrets
+
+    def write_secrets(self, secrets: dict)->None:
+        with open(self.file, "wb") as f:
             f.write(self.encrypt(json.dumps(secrets).encode("utf-8")))
 
+    def get(self, name: str)->str|None:
+        return self.fetch_secrets().get(name)
+
+    def set(self, name: str, value: str)->None:
+        secrets = self.fetch_secrets()
+        secrets[name] = value
+        self.write_secrets(secrets)
+
     def delete(self, name: str)->None:
-        with open(self.file, "rwb") as f:
-            try:
-                secrets = self.decrypt(f.read())
-            except InvalidToken:
-                return
-            secrets = json.loads(secrets.decode("utf-8"))
-            if name not in secrets:
-                return
-            del secrets[name]
-            f.write(self.encrypt(json.dumps(secrets).encode("utf-8")))
+        secrets = self.fetch_secrets()
+        if name not in secrets:
+            return
+        del secrets[name]
+        self.write_secrets(secrets)
