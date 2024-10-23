@@ -42,26 +42,23 @@ class LocalVault(Vault):
         super().__init__(password)
         self.file = file
 
-    def setup_local_vault(self) -> None:
+    def setup_local_vault(self, secrets: dict = {}) -> None:
         with open(self.file, "wb") as f:
-            secrets = self.encrypt(json.dumps({}).encode("utf-8"))
+            secrets = self.encrypt(json.dumps(secrets).encode("utf-8"))
             f.write(secrets)
 
     def fetch_secrets(self) -> dict:
-        # Once we have the CLI we might consider migrating the exception handling
-        # to there.
-        # Right now the issue is if you open an empty file and attempt to decrypt
-        # the empty (bytes) string b"" then the decryption algorithm will know it
-        # is not valid and will raise an InvalidToken exception.
-        # The strategy right now is to write an empty secrets object that has been
-        # encrypted with the correct key.
         with open(self.file, "rb") as f:
-            try:
-                secrets = self.decrypt(f.read())
-                secrets = json.loads(secrets.decode("utf-8"))
-            except InvalidToken:
-                self.setup_local_vault()
+            ciphertext = f.read()
+            if ciphertext == b"":
+                # If the ciphertext is empty, then this is the first
+                # time reading from / writing to the vault and the vault will
+                # be unencrypted, so we can't call decrypt on it
                 secrets = {}
+                self.setup_local_vault(secrets)
+            else:
+                secrets = self.decrypt(ciphertext)
+                secrets = json.loads(secrets.decode("utf-8"))
         return secrets
 
     def write_secrets(self, secrets: dict) -> None:
