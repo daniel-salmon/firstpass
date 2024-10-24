@@ -1,16 +1,11 @@
 import pytest
 
-from vault import LocalVault, Vault
+from vault import MemoryVault, Vault
 
 
 @pytest.fixture()
-def vault(tmp_path_factory: pytest.TempPathFactory):
-    path = tmp_path_factory.mktemp(".firstpass")
-    file = path / "vault"
-    file.touch()
-    vault = LocalVault(password="password", file=file)
-    vault.setup_local_vault()
-    return vault
+def vault():
+    return MemoryVault(password="password")
 
 
 @pytest.mark.parametrize(
