@@ -15,6 +15,9 @@ class Vault(ABC):
     def __init__(self, password: str) -> None:
         self.password = password
 
+    # TODO: Fernet uses AES 128 encryption. LastPass uses AES 256
+    # May want to see if there is a setting we can toggle in the cryptography package
+    # or if there is another package that would be suitable.
     @cached_property
     def cipher(self) -> Fernet:
         key = self._derive_key_from_password()
