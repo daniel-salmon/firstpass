@@ -49,14 +49,14 @@ class Vault(ABC):
 
 
 class MemoryVault(Vault):
-    def __init__(self, password)->None:
+    def __init__(self, password) -> None:
         super().__init__(password)
         self.write_secrets({})
 
-    def fetch_secrets(self)->dict:
+    def fetch_secrets(self) -> dict:
         return json.loads(self.decrypt(self.ciphertext).decode("utf-8"))
 
-    def write_secrets(self, secrets: dict)->None:
+    def write_secrets(self, secrets: dict) -> None:
         self.ciphertext = self.encrypt(json.dumps(secrets).encode("utf-8"))
 
 
