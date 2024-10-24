@@ -1,9 +1,13 @@
+import base64
 import json
 from abc import ABC, abstractmethod
 from functools import cached_property
+from hashlib import pbkdf2_hmac
 from pathlib import Path
 
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import Fernet
+
+PBKDF2_ITERATIONS = 600_000
 
 
 class Vault(ABC):
@@ -16,7 +20,13 @@ class Vault(ABC):
         return Fernet(key)
 
     def _derive_key_from_password(self) -> bytes:
-        return Fernet.generate_key()
+        dk = pbkdf2_hmac(
+            "sha256",
+            self.password.encode("utf-8"),
+            b"pinch of salt" * 2,
+            PBKDF2_ITERATIONS,
+        )
+        return base64.urlsafe_b64encode(dk)
 
     def decrypt(self, ciphertext: bytes) -> bytes:
         return self.cipher.decrypt(ciphertext)
