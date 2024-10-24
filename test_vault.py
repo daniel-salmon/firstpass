@@ -12,7 +12,7 @@ def vault():
     "plaintext", [b"plaintext", b"what a string", b'{"pickles": "rule"}']
 )
 def test_encrypt_decrypt(plaintext: bytes, vault: Vault):
-    assert plaintext == vault.decrypt(vault.encrypt(plaintext))
+    assert vault.decrypt(vault.encrypt(plaintext)) == plaintext
 
 
 @pytest.mark.parametrize(
