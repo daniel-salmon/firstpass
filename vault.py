@@ -79,7 +79,9 @@ class LocalVault(Vault):
         super().__init__(password)
         self.file = file
 
-    def setup_local_vault(self, secrets: dict = {}) -> None:
+    def setup_local_vault(self, secrets: dict | None = None) -> None:
+        if secrets is None:
+            secrets = {}
         with open(self.file, "wb") as f:
             secrets = self.encrypt(json.dumps(secrets).encode("utf-8"))
             f.write(secrets)
