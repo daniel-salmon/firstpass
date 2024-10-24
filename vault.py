@@ -89,7 +89,7 @@ class LocalVault(Vault):
     def fetch_secrets(self) -> dict:
         with open(self.file, "rb") as f:
             ciphertext = f.read()
-            if ciphertext == b"":
+            if not ciphertext:
                 # If the ciphertext is empty, then this is the first
                 # time reading from / writing to the vault and the vault will
                 # be unencrypted, so we can't call decrypt on it
