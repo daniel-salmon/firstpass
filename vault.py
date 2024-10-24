@@ -24,16 +24,27 @@ class Vault(ABC):
     def encrypt(self, plaintext: bytes) -> bytes:
         return self.cipher.encrypt(plaintext)
 
-    @abstractmethod
     def get(self, name: str) -> str | None:
-        pass
+        return self.fetch_secrets().get(name)
 
-    @abstractmethod
     def set(self, name: str, value: str) -> None:
+        secrets = self.fetch_secrets()
+        secrets[name] = value
+        self.write_secrets(secrets)
+
+    def delete(self, name: str) -> None:
+        secrets = self.fetch_secrets()
+        if name not in secrets:
+            return
+        del secrets[name]
+        self.write_secrets(secrets)
+
+    @abstractmethod
+    def fetch_secrets(self) -> dict:
         pass
 
     @abstractmethod
-    def delete(self, name: str) -> None:
+    def write_secrets(self, secrets: dict) -> None:
         pass
 
 
@@ -64,18 +75,3 @@ class LocalVault(Vault):
     def write_secrets(self, secrets: dict) -> None:
         with open(self.file, "wb") as f:
             f.write(self.encrypt(json.dumps(secrets).encode("utf-8")))
-
-    def get(self, name: str) -> str | None:
-        return self.fetch_secrets().get(name)
-
-    def set(self, name: str, value: str) -> None:
-        secrets = self.fetch_secrets()
-        secrets[name] = value
-        self.write_secrets(secrets)
-
-    def delete(self, name: str) -> None:
-        secrets = self.fetch_secrets()
-        if name not in secrets:
-            return
-        del secrets[name]
-        self.write_secrets(secrets)
