@@ -14,5 +14,4 @@ dev-dependencies = [
     "pytest-cov>=5.0.0",
     "ruff>=0.7.0",
     "pre-commit>=4.0.1",
-    "mypy>=1.13.0",
 ]
