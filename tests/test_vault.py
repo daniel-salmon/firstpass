@@ -1,6 +1,6 @@
 import pytest
 
-from vault import MemoryVault, Vault
+from firstpass.vault import MemoryVault, Vault
 
 
 @pytest.fixture()
