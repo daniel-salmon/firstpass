@@ -83,21 +83,21 @@ class LocalVault(Vault):
         if secrets is None:
             secrets = {}
         with open(self.file, "wb") as f:
-            secrets = self.encrypt(json.dumps(secrets).encode("utf-8"))
-            f.write(secrets)
+            encrypted_secrets = self.encrypt(json.dumps(secrets).encode("utf-8"))
+            f.write(encrypted_secrets)
 
     def fetch_secrets(self) -> dict:
+        secrets: dict = {}
         with open(self.file, "rb") as f:
             ciphertext = f.read()
             if not ciphertext:
                 # If the ciphertext is empty, then this is the first
                 # time reading from / writing to the vault and the vault will
                 # be unencrypted, so we can't call decrypt on it
-                secrets = {}
                 self.setup_local_vault(secrets)
             else:
-                secrets = self.decrypt(ciphertext)
-                secrets = json.loads(secrets.decode("utf-8"))
+                raw_secrets = self.decrypt(ciphertext)
+                secrets = json.loads(raw_secrets.decode("utf-8"))
         return secrets
 
     def write_secrets(self, secrets: dict) -> None:
