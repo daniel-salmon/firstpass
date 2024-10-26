@@ -1,14 +1,23 @@
+from enum import StrEnum
 from typing import Self
 
 from pydantic import BaseModel
 from pydantic_core import from_json
 
 
-class Password(BaseModel):
+class Secret:
+    pass
+
+
+class Password(Secret, BaseModel):
     username: str
     password: str
     url: str | None = None
     notes: str | None = None
+
+
+class SecretsType(StrEnum):
+    passwords = "passwords"
 
 
 class Secrets(BaseModel):
