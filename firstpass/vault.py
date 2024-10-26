@@ -51,8 +51,6 @@ class Vault(ABC):
             (bytes): The raw bytes of the secrets object.
 
         """
-        # TODO: Update this using the minimum size of empty secrets.
-        # E.g., an empty vault should have a blob size of salt + empty secrets
         assert len(blob) >= SALT_SIZE_BYTES
         salt, ciphertext = blob[:SALT_SIZE_BYTES], blob[SALT_SIZE_BYTES:]
         if self.salt != salt:
