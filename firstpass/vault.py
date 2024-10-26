@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 from abc import ABC, abstractmethod
 from functools import cached_property
 from pathlib import Path
@@ -8,12 +9,14 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+SALT_SIZE_BYTES = 16
 PBKDF2_ITERATIONS = 600_000
 
 
 class Vault(ABC):
     def __init__(self, password: str) -> None:
         self.password = password
+        self.salt: bytes | None = None
 
     # TODO: Fernet uses AES 128 encryption. LastPass uses AES 256
     # May want to see if there is a setting we can toggle in the cryptography package
@@ -24,19 +27,25 @@ class Vault(ABC):
         return Fernet(key)
 
     def _derive_key_from_password(self) -> bytes:
+        if self.salt is None:
+            self.salt = os.urandom(SALT_SIZE_BYTES)
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=b"pinch of salt" * 2,
+            salt=self.salt,
             iterations=PBKDF2_ITERATIONS,
         )
         return base64.urlsafe_b64encode(kdf.derive(self.password.encode("utf-8")))
 
-    def decrypt(self, ciphertext: bytes) -> bytes:
+    def decrypt(self, blob: bytes) -> bytes:
+        salt, ciphertext = blob[:SALT_SIZE_BYTES], blob[SALT_SIZE_BYTES:]
+        if self.salt is None:
+            self.salt = salt
         return self.cipher.decrypt(ciphertext)
 
     def encrypt(self, plaintext: bytes) -> bytes:
-        return self.cipher.encrypt(plaintext)
+        ciphertext = self.cipher.encrypt(plaintext)
+        return self.salt + ciphertext
 
     def get(self, name: str) -> str | None:
         return self.fetch_secrets().get(name)
@@ -68,10 +77,10 @@ class MemoryVault(Vault):
         self.write_secrets({})
 
     def fetch_secrets(self) -> dict:
-        return json.loads(self.decrypt(self.ciphertext).decode("utf-8"))
+        return json.loads(self.decrypt(self.blob).decode("utf-8"))
 
     def write_secrets(self, secrets: dict) -> None:
-        self.ciphertext = self.encrypt(json.dumps(secrets).encode("utf-8"))
+        self.blob = self.encrypt(json.dumps(secrets).encode("utf-8"))
 
 
 class LocalVault(Vault):
