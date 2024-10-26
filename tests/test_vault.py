@@ -61,7 +61,7 @@ def test_set_get_delete(
     ],
 )
 def test_local_vault(
-    name: str, secret: Secret, secrets_type: SecretsType, tmp_path: Path
+    secrets_type: SecretsType, name: str, secret: Secret, tmp_path: Path
 ) -> None:
     vault = LocalVault(password="password", file=tmp_path / "secrets")
     vault.set(secrets_type, name, secret)

@@ -53,13 +53,7 @@ class Vault(ABC):
         """
         assert len(blob) >= SALT_SIZE_BYTES
         salt, ciphertext = blob[:SALT_SIZE_BYTES], blob[SALT_SIZE_BYTES:]
-        if self.salt != salt:
-            # The salt recorded in the blob differs from the salt with which
-            # our cipher was constructed (using salt + password to generate the key)
-            # So we delete the cipher so that it can be recomputed using the
-            # updated salt, instead of using the cached cipher.
-            if self.salt is not None:
-                del self.__dict__["cipher"]
+        if self.salt is None:
             self.salt = salt
         return self.cipher.decrypt(ciphertext)
 
