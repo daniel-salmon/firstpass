@@ -38,8 +38,17 @@ class Vault(ABC):
         return base64.urlsafe_b64encode(kdf.derive(self.password.encode("utf-8")))
 
     def decrypt(self, blob: bytes) -> bytes:
+        # TODO: Update this using the minimum size of empty secrets.
+        # E.g., an empty vault should have a blob size of salt + empty secrets
+        assert len(blob) >= SALT_SIZE_BYTES
         salt, ciphertext = blob[:SALT_SIZE_BYTES], blob[SALT_SIZE_BYTES:]
-        if self.salt is None:
+        if self.salt != salt:
+            # The salt recorded in the blob differs from the salt with which
+            # our cipher was constructed (using salt + password to generate the key)
+            # So we delete the cipher so that it can be recomputed using the
+            # updated salt, instead of using the cached cipher.
+            if self.salt is not None:
+                del self.__dict__["cipher"]
             self.salt = salt
         return self.cipher.decrypt(ciphertext)
 
