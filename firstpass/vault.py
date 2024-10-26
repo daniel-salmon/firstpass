@@ -69,19 +69,12 @@ class Vault(ABC):
         ciphertext = self.cipher.encrypt(plaintext)
         return self.salt + ciphertext
 
-    def get(
-        self, name: str, secrets_type: SecretsType = SecretsType.passwords
-    ) -> Secret | None:
+    def get(self, secrets_type: SecretsType, name: str) -> Secret | None:
         secrets = self.fetch_secrets()
         subsecrets = getattr(secrets, secrets_type)
         return subsecrets.get(name) if subsecrets is not None else None
 
-    def set(
-        self,
-        name: str,
-        secret: Secret,
-        secrets_type: SecretsType = SecretsType.passwords,
-    ) -> None:
+    def set(self, secrets_type: SecretsType, name: str, secret: Secret) -> None:
         secrets = self.fetch_secrets()
         subsecrets = getattr(secrets, secrets_type)
         if subsecrets is None:
@@ -90,9 +83,7 @@ class Vault(ABC):
         subsecrets[name] = secret
         self.write_secrets(secrets)
 
-    def delete(
-        self, name: str, secrets_type: SecretsType = SecretsType.passwords
-    ) -> None:
+    def delete(self, secrets_type: SecretsType, name: str) -> None:
         secrets = self.fetch_secrets()
         subsecrets = getattr(secrets, secrets_type)
         if subsecrets is None or name not in subsecrets:
