@@ -5,15 +5,14 @@ from pydantic import BaseModel
 from pydantic_core import from_json
 
 
-class Secret:
-    pass
-
-
-class Password(Secret, BaseModel):
-    username: str
-    password: str
+class Secret(BaseModel):
     label: str | None = None
     notes: str | None = None
+
+
+class Password(Secret):
+    username: str
+    password: str
 
 
 class SecretsType(StrEnum):
