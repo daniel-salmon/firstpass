@@ -15,7 +15,7 @@ from firstpass.secrets import Password, Secrets
                 "password2": Password(
                     username="sticks",
                     password="password",
-                    url="https://pybit.es",
+                    label="https://pybit.es",
                     notes="lorem ipsum",
                 ),
             }

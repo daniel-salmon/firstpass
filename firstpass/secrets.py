@@ -12,7 +12,7 @@ class Secret:
 class Password(Secret, BaseModel):
     username: str
     password: str
-    url: str | None = None
+    label: str | None = None
     notes: str | None = None
 
 
