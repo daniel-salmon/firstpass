@@ -21,17 +21,17 @@ def test_encrypt_decrypt(plaintext: bytes, vault: Vault) -> None:
     "secrets_type, name, secret",
     [
         (
-            SecretsType.passwords,
+            SecretsType.passwords,  # type: ignore
             "login1",
             Password(username="fish", password="password"),
         ),
         (
-            SecretsType.passwords,
+            SecretsType.passwords,  # type: ignore
             "login2",
             Password(username="jumbalaya", password="password2!xjbopajpoiabpoijweg"),
         ),
         (
-            SecretsType.passwords,
+            SecretsType.passwords,  # type: ignore
             "ajapdfipjwe",
             Password(username="pete", password="pebpjqefvp92!$T$!))"),
         ),
@@ -54,7 +54,7 @@ def test_set_get_delete(
     "secrets_type, name, secret",
     [
         (
-            SecretsType.passwords,
+            SecretsType.passwords,  # type: ignore
             "pybites",
             Password(username="pybites", password="super-secret-password"),
         ),

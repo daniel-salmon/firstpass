@@ -15,10 +15,6 @@ class Password(Secret):
     password: str
 
 
-class SecretsType(StrEnum):
-    passwords = "passwords"
-
-
 class Secrets(BaseModel):
     passwords: dict[str, Password] | None = None
 
@@ -28,3 +24,6 @@ class Secrets(BaseModel):
     @classmethod
     def deserialize(cls, secrets: bytes) -> Self:
         return cls(**from_json(secrets))
+
+
+SecretsType = StrEnum("SecretsType", list(Secrets.model_fields))  # type: ignore
