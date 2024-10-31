@@ -1,6 +1,5 @@
-from json import JSONEncoder
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID, uuid4
 
 import jwt
@@ -41,13 +40,6 @@ class User(NewUser):
     blob: bytes | None = None
 
 
-class UUIDEncoder(JSONEncoder):
-    def default(self, obj) -> Any:
-        if isinstance(obj, UUID):
-            return str(obj)
-        return JSONEncoder.default(self, obj)
-
-
 db: dict[str, User] = {}
 
 
@@ -82,7 +74,7 @@ async def new_user(new_user: NewUser) -> Token:
     db[user.username] = user
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"user_id": user.id, "username": user.username},
+        data={"username": user.username},
         expires_delta=access_token_expires,
     )
     return Token(access_token=access_token, token_type="bearer")
@@ -94,9 +86,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     data = data.copy()
     exp = datetime.now(timezone.utc) + expires_delta
     data.update({"exp": exp})
-    encoded_jwt = jwt.encode(
-        data, SECRET_KEY, algorithm=ALGORITHM, json_encoder=UUIDEncoder
-    )
+    encoded_jwt = jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
@@ -120,7 +110,7 @@ async def token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"user_id": user.id, "username": user.username},
+        data={"username": user.username},
         expires_delta=access_token_expires,
     )
     return Token(access_token=access_token, token_type="bearer")
