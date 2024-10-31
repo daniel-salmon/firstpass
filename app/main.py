@@ -26,10 +26,6 @@ class Token(BaseModel):
     token_type: str
 
 
-class TokenData(BaseModel):
-    id: UUID
-
-
 class NewUser(BaseModel):
     username: str
     password: str
