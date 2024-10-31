@@ -2,6 +2,7 @@ import pytest
 from pathlib import Path
 
 from firstpass.vault import LocalVault, MemoryVault, Vault
+from firstpass.secrets import Secret, Password, SecretsType
 
 
 @pytest.fixture()
@@ -17,29 +18,53 @@ def test_encrypt_decrypt(plaintext: bytes, vault: Vault) -> None:
 
 
 @pytest.mark.parametrize(
-    "name, value",
+    "secrets_type, name, secret",
     [
-        ("login1", "password1"),
-        ("login2", "password2!xjbopajpoiabpoijweg"),
-        ("ajapdfipjwe", "pebpjqefvp92!$T$!))"),
+        (
+            SecretsType.passwords,  # type: ignore
+            "login1",
+            Password(username="fish", password="password"),
+        ),
+        (
+            SecretsType.passwords,  # type: ignore
+            "login2",
+            Password(username="jumbalaya", password="password2!xjbopajpoiabpoijweg"),
+        ),
+        (
+            SecretsType.passwords,  # type: ignore
+            "ajapdfipjwe",
+            Password(username="pete", password="pebpjqefvp92!$T$!))"),
+        ),
     ],
 )
-def test_set_get_delete(name: str, value: str, vault: Vault) -> None:
-    vault.set(name, value)
-    assert vault.get(name) == value
-    vault.delete(name)
-    assert vault.get(name) is None
+def test_set_get_delete(
+    secrets_type: SecretsType, name: str, secret: Secret, vault: Vault
+) -> None:
+    vault.set(
+        secrets_type,
+        name,
+        secret,
+    )
+    assert vault.get(secrets_type, name) == secret
+    vault.delete(secrets_type, name)
+    assert vault.get(secrets_type, name) is None
 
 
 @pytest.mark.parametrize(
-    "name, value",
+    "secrets_type, name, secret",
     [
-        ("pybites", "super-secret-password"),
+        (
+            SecretsType.passwords,  # type: ignore
+            "pybites",
+            Password(username="pybites", password="super-secret-password"),
+        ),
     ],
 )
-def test_local_vault(name: str, value: str, tmp_path: Path) -> None:
+def test_local_vault(
+    secrets_type: SecretsType, name: str, secret: Secret, tmp_path: Path
+) -> None:
     vault = LocalVault(password="password", file=tmp_path / "secrets")
-    vault.set(name=name, value=value)
-    assert vault.get(name) == value
-    vault.delete(name)
-    assert vault.get(name) is None
+    vault.set(secrets_type, name, secret)
+    assert vault.get(secrets_type, name) == secret
+    vault.delete(secrets_type, name)
+    assert vault.get(secrets_type, name) is None
