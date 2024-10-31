@@ -51,7 +51,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("username")
+        username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
     except InvalidTokenError:
@@ -74,7 +74,7 @@ async def new_user(new_user: NewUser) -> Token:
     db[user.username] = user
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"username": user.username},
+        data={"sub": f"{user.username}"},
         expires_delta=access_token_expires,
     )
     return Token(access_token=access_token, token_type="bearer")
@@ -110,7 +110,7 @@ async def token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"username": user.username},
+        data={"sub": f"{user.username}"},
         expires_delta=access_token_expires,
     )
     return Token(access_token=access_token, token_type="bearer")
