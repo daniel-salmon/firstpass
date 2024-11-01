@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     secret_key: str
     jwt_signing_algorithm: str
-    access_token_expire_minutes: int
+    access_token_expire_minutes: timedelta
     pwd_hash_scheme: str
 
 
@@ -96,11 +96,9 @@ async def new_user(
     hashed_password = pwd_ctx.hash(new_user.password)
     user = User(username=new_user.username, password=hashed_password)
     db[user.username] = user
-    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = _create_access_token(
         data={"sub": f"{user.username}"},
         settings=settings,
-        expires_delta=access_token_expires,
     )
     return Token(access_token=access_token, token_type="bearer")
 
@@ -108,11 +106,11 @@ async def new_user(
 def _create_access_token(
     *,
     data: dict,
-    settings: Annotated[Settings, Depends(get_settings)],
+    settings: Settings,
     expires_delta: timedelta | None = None,
 ):
     if expires_delta is None:
-        expires_delta = timedelta(minutes=settings.access_token_expire_minutes)
+        expires_delta = settings.access_token_expire_minutes
     data = data.copy()
     exp = datetime.now(timezone.utc) + expires_delta
     data.update({"exp": exp})
@@ -143,11 +141,9 @@ async def token(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = _create_access_token(
         data={"sub": f"{user.username}"},
         settings=settings,
-        expires_delta=access_token_expires,
     )
     return Token(access_token=access_token, token_type="bearer")
 
