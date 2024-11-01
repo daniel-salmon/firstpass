@@ -59,7 +59,7 @@ class UserCreate(UserBase):
 db: dict[str, User] = {}
 
 
-async def get_current_user(
+async def _get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     settings: Annotated[Settings, Depends(get_settings)],
 ):
@@ -96,7 +96,7 @@ async def new_user(
     user = User(username=new_user.username, password=hashed_password)
     db[user.username] = user
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
-    access_token = create_access_token(
+    access_token = _create_access_token(
         data={"sub": f"{user.username}"},
         settings=settings,
         expires_delta=access_token_expires,
@@ -104,7 +104,7 @@ async def new_user(
     return Token(access_token=access_token, token_type="bearer")
 
 
-def create_access_token(
+def _create_access_token(
     *,
     data: dict,
     settings: Annotated[Settings, Depends(get_settings)],
@@ -121,7 +121,7 @@ def create_access_token(
     return encoded_jwt
 
 
-def authenticate_user(db: dict[str, User], username: str, password: str):
+def _authenticate_user(db: dict[str, User], username: str, password: str):
     user = db.get(username)
     if user is None:
         return None
@@ -135,7 +135,7 @@ async def token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     settings: Annotated[Settings, Depends(get_settings)],
 ):
-    user = authenticate_user(db, form_data.username, form_data.password)
+    user = _authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -143,7 +143,7 @@ async def token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
-    access_token = create_access_token(
+    access_token = _create_access_token(
         data={"sub": f"{user.username}"},
         settings=settings,
         expires_delta=access_token_expires,
@@ -152,6 +152,6 @@ async def token(
 
 
 @app.get("/hello")
-async def hello(user: Annotated[User, Depends(get_current_user)]):
+async def hello(user: Annotated[User, Depends(_get_current_user)]):
     print(user)
     return user
