@@ -58,16 +58,17 @@ class UserCreate(UserBase):
 
 db: dict[str, User] = {}
 
+credentials_exception = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Could not validate credentials",
+    headers={"WWW-Authenticate": "Bearer"},
+)
+
 
 async def _get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     settings: Annotated[Settings, Depends(get_settings)],
 ):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
     try:
         payload = jwt.decode(
             token, settings.secret_key, algorithms=[settings.jwt_signing_algorithm]
