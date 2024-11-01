@@ -9,13 +9,14 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 from pydantic import BaseModel, Field
+from pydantic.types import StringConstraints
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
-    secret_key: str
+    secret_key: Annotated[str, StringConstraints(min_length=64, max_length=64)]
     jwt_signing_algorithm: str
     access_token_expire_minutes: timedelta
     pwd_hash_scheme: str
