@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -8,15 +9,26 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-SECRET_KEY = "a63aed4e83e489a77632a0c3e005808256cc6e0812102bf3d8c7a49fcaa461ad"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env")
+
+    secret_key: str
+    jwt_signing_algorithm: str
+    access_token_expire_minutes: int
+    pwd_hash_scheme: str
+
+
+@lru_cache
+def get_settings():
+    return Settings()
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-pwd_ctx = CryptContext(schemes=["sha512_crypt"])
+pwd_ctx = CryptContext(schemes=[get_settings().pwd_hash_scheme])
 
 app = FastAPI()
 
@@ -39,14 +51,19 @@ class User(NewUser):
 db: dict[str, User] = {}
 
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+async def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.jwt_signing_algorithm]
+        )
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
@@ -59,7 +76,9 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
 
 
 @app.post("/user")
-async def new_user(new_user: NewUser) -> Token:
+async def new_user(
+    new_user: NewUser, settings: Annotated[Settings, Depends(get_settings)]
+) -> Token:
     if new_user.username in db:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -68,21 +87,29 @@ async def new_user(new_user: NewUser) -> Token:
     hashed_password = pwd_ctx.hash(new_user.password)
     user = User(username=new_user.username, password=hashed_password)
     db[user.username] = user
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = create_access_token(
         data={"sub": f"{user.username}"},
+        settings=settings,
         expires_delta=access_token_expires,
     )
     return Token(access_token=access_token, token_type="bearer")
 
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
+def create_access_token(
+    *,
+    data: dict,
+    settings: Annotated[Settings, Depends(get_settings)],
+    expires_delta: timedelta | None = None,
+):
     if expires_delta is None:
-        expires_delta = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expires_delta = timedelta(minutes=settings.access_token_expire_minutes)
     data = data.copy()
     exp = datetime.now(timezone.utc) + expires_delta
     data.update({"exp": exp})
-    encoded_jwt = jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(
+        data, settings.secret_key, algorithm=settings.jwt_signing_algorithm
+    )
     return encoded_jwt
 
 
@@ -96,7 +123,10 @@ def authenticate_user(db: dict[str, User], username: str, password: str):
 
 
 @app.post("/token")
-async def token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+async def token(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -104,9 +134,10 @@ async def token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = create_access_token(
         data={"sub": f"{user.username}"},
+        settings=settings,
         expires_delta=access_token_expires,
     )
     return Token(access_token=access_token, token_type="bearer")

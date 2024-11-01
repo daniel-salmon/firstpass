@@ -8,6 +8,7 @@ dependencies = [
     "cryptography>=43.0.3",
     "fastapi[standard]>=0.115.4",
     "passlib>=1.7.4",
+    "pydantic-settings>=2.6.0",
     "pydantic>=2.9.2",
     "pyjwt>=2.9.0",
 ]
