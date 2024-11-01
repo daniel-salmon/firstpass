@@ -65,6 +65,15 @@ credentials_exception = HTTPException(
 )
 
 
+def _get_user(username: str) -> User | None:
+    return db.get(username)
+
+
+def _set_user(user: User) -> User:
+    db[user.username] = user
+    return user
+
+
 async def _get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -78,7 +87,7 @@ async def _get_current_user(
             raise credentials_exception
     except InvalidTokenError:
         raise credentials_exception
-    user = db.get(username)
+    user = _get_user(username)
     if user is None:
         raise credentials_exception
     return user
@@ -88,14 +97,13 @@ async def _get_current_user(
 async def new_user(
     new_user: UserCreate, settings: Annotated[Settings, Depends(get_settings)]
 ) -> Token:
-    if new_user.username in db:
+    if _get_user(new_user.username) is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Username already exists",
         )
     hashed_password = pwd_ctx.hash(new_user.password)
-    user = User(username=new_user.username, password=hashed_password)
-    db[user.username] = user
+    user = _set_user(User(username=new_user.username, password=hashed_password))
     access_token = _create_access_token(
         data={"sub": f"{user.username}"},
         settings=settings,
@@ -120,8 +128,8 @@ def _create_access_token(
     return encoded_jwt
 
 
-def _authenticate_user(db: dict[str, User], username: str, password: str):
-    user = db.get(username)
+def _authenticate_user(username: str, password: str):
+    user = _get_user(username)
     if user is None:
         return None
     if not pwd_ctx.verify(password, user.password):
@@ -134,7 +142,7 @@ async def token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     settings: Annotated[Settings, Depends(get_settings)],
 ):
-    user = _authenticate_user(db, form_data.username, form_data.password)
+    user = _authenticate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
