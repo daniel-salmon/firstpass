@@ -45,7 +45,7 @@ class UserBase(BaseModel):
 
 
 class Blob(BaseModel):
-    id: UUID = Field(default_factory=uuid4)
+    blob_id: UUID = Field(default_factory=uuid4)
     blob: bytes | None = None
 
 
@@ -55,6 +55,11 @@ class User(UserBase, Blob):
 
 class UserCreate(UserBase):
     pass
+
+
+class UserGet(BaseModel):
+    username: str
+    blob_id: UUID
 
 
 db: dict[str, User] = {}
@@ -73,6 +78,10 @@ def _get_user(username: str) -> User | None:
 def _set_user(user: User) -> User:
     db[user.username] = user
     return user
+
+
+def _update_user_blob(user: User, blob: Blob) -> None:
+    user.blob = blob.blob
 
 
 async def _get_current_user(
@@ -95,7 +104,7 @@ async def _get_current_user(
 
 
 @app.post("/user")
-async def new_user(
+async def create_user(
     new_user: UserCreate, settings: Annotated[Settings, Depends(get_settings)]
 ) -> Token:
     if _get_user(new_user.username) is not None:
@@ -157,7 +166,33 @@ async def token(
     return Token(access_token=access_token, token_type="bearer")
 
 
-@app.get("/hello")
-async def hello(user: Annotated[User, Depends(_get_current_user)]):
-    print(user)
-    return user
+@app.get("/", status_code=status.HTTP_200_OK)
+async def get_user(user: Annotated[User, Depends(_get_current_user)]) -> UserGet:
+    return UserGet(username=user.username, blob_id=user.blob_id)
+
+
+@app.get("/{blob_id}", status_code=status.HTTP_200_OK)
+async def get_blob(
+    blob_id: UUID, user: Annotated[User, Depends(_get_current_user)]
+) -> Blob:
+    if blob_id != user.blob_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Blob does not match User's blob",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    blob = Blob(blob_id=user.blob_id, blob=user.blob)
+    return blob
+
+
+@app.put("/{blob_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def put_blob(
+    blob_id: UUID, blob: Blob, user: Annotated[User, Depends(_get_current_user)]
+):
+    if blob_id != user.blob_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Blob does not match User's blob",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    _update_user_blob(user, blob)
