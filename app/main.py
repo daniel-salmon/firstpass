@@ -38,14 +38,22 @@ class Token(BaseModel):
     token_type: str
 
 
-class NewUser(BaseModel):
+class UserBase(BaseModel):
     username: str
     password: str
 
 
-class User(NewUser):
+class Blob(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     blob: bytes | None = None
+
+
+class User(UserBase, Blob):
+    pass
+
+
+class UserCreate(UserBase):
+    pass
 
 
 db: dict[str, User] = {}
@@ -77,7 +85,7 @@ async def get_current_user(
 
 @app.post("/user")
 async def new_user(
-    new_user: NewUser, settings: Annotated[Settings, Depends(get_settings)]
+    new_user: UserCreate, settings: Annotated[Settings, Depends(get_settings)]
 ) -> Token:
     if new_user.username in db:
         raise HTTPException(
