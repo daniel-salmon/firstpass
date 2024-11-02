@@ -42,6 +42,22 @@ def user1(client: TestClient) -> tuple[User, Token, str]:
     return user, token, password
 
 
+@pytest.fixture(scope="module")
+def user2(client: TestClient) -> tuple[User, Token, str]:
+    username, password = "sushi", "tuna"
+    user_create = UserCreate(username=username, password=password)
+    response = client.post("/user", json=jsonable_encoder(user_create))
+    token = Token(**response.json())
+    user = _get_user(user_create.username)
+    assert user is not None
+    return user, token, password
+
+
+def _build_auth_header(token: Token) -> dict[str, str]:
+    header = {"Authorization": f"Bearer {token.access_token}"}
+    return header
+
+
 @pytest.mark.parametrize(
     "sub, want",
     [
@@ -143,8 +159,7 @@ def test_get_user_without_auth(client):
 
 def test_get_user(user1: tuple[User, Token, str], client: TestClient):
     user, token, _ = user1
-    headers = {"Authorization": f"Bearer {token.access_token}"}
-    response = client.get("/user", headers=headers)
+    response = client.get("/user", headers=_build_auth_header(token))
     assert response.status_code == status.HTTP_200_OK
     user_get = UserGet(**response.json())
     assert user_get.username == user.username
@@ -154,6 +169,29 @@ def test_get_user(user1: tuple[User, Token, str], client: TestClient):
 def test_get_blob_without_auth(client):
     response = client.get("/e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_get_blob_does_not_exist(user1: tuple[User, Token, str], client: TestClient):
+    user, token, _ = user1
+    response = client.get(
+        "/e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7", headers=_build_auth_header(token)
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_get_blob_owned_by_another_user(
+    user1: tuple[User, Token, str], user2: tuple[User, Token, str], client: TestClient
+):
+    _, user1_token, _ = user1
+    _user2, _, _ = user2
+    response = client.get(f"/{_user2.blob_id}", headers=_build_auth_header(user1_token))
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_get_blob(user1: tuple[User, Token, str], client: TestClient):
+    user, token, _ = user1
+    response = client.get(f"/{user.blob_id}", headers=_build_auth_header(token))
+    assert response.status_code == status.HTTP_200_OK
 
 
 def test_put_blob_without_auth(client):
