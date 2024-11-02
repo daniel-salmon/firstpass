@@ -1,14 +1,14 @@
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Annotated, Self
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, UUID4
 from pydantic.types import StringConstraints
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -45,7 +45,7 @@ class UserBase(BaseModel):
 
 
 class Blob(BaseModel):
-    blob_id: UUID = Field(default_factory=uuid4)
+    blob_id: UUID4 = Field(default_factory=uuid4)
     blob: bytes | None = None
 
 
@@ -59,12 +59,12 @@ class UserCreate(UserBase):
 
 class UserGet(BaseModel):
     username: str
-    blob_id: UUID
+    blob_id: UUID4
 
 
 class JWTSub(BaseModel):
     username: str
-    blob_id: UUID
+    blob_id: UUID4
 
     def __str__(self) -> str:
         return f"username:{self.username} blob_id:{str(self.blob_id)}"
@@ -202,7 +202,7 @@ async def post_user(
 
 @app.get("/{blob_id}", status_code=status.HTTP_200_OK)
 async def get_blob(
-    blob_id: UUID, user: Annotated[User, Depends(_get_current_user)]
+    blob_id: UUID4, user: Annotated[User, Depends(_get_current_user)]
 ) -> Blob:
     if blob_id != user.blob_id:
         raise HTTPException(
@@ -216,7 +216,7 @@ async def get_blob(
 
 @app.put("/{blob_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def put_blob(
-    blob_id: UUID, blob: Blob, user: Annotated[User, Depends(_get_current_user)]
+    blob_id: UUID4, blob: Blob, user: Annotated[User, Depends(_get_current_user)]
 ):
     if blob_id != user.blob_id:
         raise HTTPException(

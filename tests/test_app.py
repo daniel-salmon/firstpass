@@ -1,11 +1,9 @@
-from uuid import UUID
-
 import jwt
 import pytest
 from fastapi import status
 from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
+from pydantic import UUID4, ValidationError
 
 from app.main import (
     app,
@@ -61,7 +59,7 @@ def test_jwt_sub__str__(sub: JWTSub, want: str):
             "username:<username> blob_id:e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7",
             JWTSub(
                 username="<username>",
-                blob_id=UUID("e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7"),
+                blob_id=UUID4("e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7"),
             ),
             None,
         ),
