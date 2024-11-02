@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Self
 from uuid import UUID, uuid4
 
 import jwt
@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from pydantic.types import StringConstraints
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -62,6 +62,32 @@ class UserGet(BaseModel):
     blob_id: UUID
 
 
+class JWTSub(BaseModel):
+    username: str
+    blob_id: UUID
+
+    def __str__(self) -> str:
+        return f"username:{self.username} blob_id:{str(self.blob_id)}"
+
+    @classmethod
+    def from_str(cls, sub_string: str) -> Self:
+        """
+        Parse the 'sub' value of a JWT.
+
+        Our JWT's have a 'sub' key with a value that is a string formatted like
+        'username:<username> blob_id:<blob_id>'.
+        """
+        assert "username:" in sub_string
+        assert "blob_id:" in sub_string
+        sub_dict = {}
+        items = sub_string.split()
+        assert len(items) == 2
+        for item in items:
+            subs = item.split(":")
+            sub_dict[subs[0]] = subs[1]
+        return cls(**sub_dict)
+
+
 db: dict[str, User] = {}
 
 credentials_exception = HTTPException(
@@ -92,33 +118,18 @@ async def _get_current_user(
         payload = jwt.decode(
             token, settings.secret_key, algorithms=[settings.jwt_signing_algorithm]
         )
-        username = payload.get("sub")
-        if username is None:
+        sub_string = payload.get("sub")
+        if sub_string is None:
             raise credentials_exception
-    except InvalidTokenError:
+        sub = JWTSub.from_str(sub_string)
+        if sub.username == "":
+            raise credentials_exception
+    except (AssertionError, InvalidTokenError, ValidationError):
         raise credentials_exception
-    user = _get_user(username)
-    if user is None:
+    user = _get_user(sub.username)
+    if user is None or user.blob_id != sub.blob_id:
         raise credentials_exception
     return user
-
-
-@app.post("/user")
-async def create_user(
-    new_user: UserCreate, settings: Annotated[Settings, Depends(get_settings)]
-) -> Token:
-    if _get_user(new_user.username) is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Username already exists",
-        )
-    hashed_password = pwd_ctx.hash(new_user.password)
-    user = _set_user(User(username=new_user.username, password=hashed_password))
-    access_token = _create_access_token(
-        data={"sub": f"username: {user.username} blob_id: {user.blob_id}"},
-        settings=settings,
-    )
-    return Token(access_token=access_token, token_type="bearer")
 
 
 def _create_access_token(
@@ -147,6 +158,11 @@ def _authenticate_user(username: str, password: str):
     return user
 
 
+@app.get("/", status_code=status.HTTP_200_OK)
+async def get_user(user: Annotated[User, Depends(_get_current_user)]) -> UserGet:
+    return UserGet(username=user.username, blob_id=user.blob_id)
+
+
 @app.post("/token")
 async def token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
@@ -160,15 +176,33 @@ async def token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = _create_access_token(
-        data={"sub": f"username: {user.username} blob_id: {user.blob_id}"},
+        data={"sub": str(JWTSub(username=user.username, blob_id=user.blob_id))},
         settings=settings,
     )
     return Token(access_token=access_token, token_type="bearer")
 
 
-@app.get("/", status_code=status.HTTP_200_OK)
-async def get_user(user: Annotated[User, Depends(_get_current_user)]) -> UserGet:
-    return UserGet(username=user.username, blob_id=user.blob_id)
+@app.post("/user", status_code=status.HTTP_201_CREATED)
+async def post_user(
+    new_user: UserCreate, settings: Annotated[Settings, Depends(get_settings)]
+) -> Token:
+    if new_user.username == "":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username cannot be the empty string",
+        )
+    if _get_user(new_user.username) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username already exists",
+        )
+    hashed_password = pwd_ctx.hash(new_user.password)
+    user = _set_user(User(username=new_user.username, password=hashed_password))
+    access_token = _create_access_token(
+        data={"sub": str(JWTSub(username=user.username, blob_id=user.blob_id))},
+        settings=settings,
+    )
+    return Token(access_token=access_token, token_type="bearer")
 
 
 @app.get("/{blob_id}", status_code=status.HTTP_200_OK)
