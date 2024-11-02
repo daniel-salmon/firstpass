@@ -15,6 +15,7 @@ from app.main import (
     Token,
     User,
     UserCreate,
+    UserGet,
 )
 
 
@@ -31,12 +32,14 @@ def client() -> TestClient:
 
 
 @pytest.fixture(scope="module")
-def user1(client: TestClient) -> User:
-    user_create = UserCreate(username="fish", password="password")
-    _ = client.post("/user", json=jsonable_encoder(user_create))
+def user1(client: TestClient) -> tuple[User, Token, str]:
+    username, password = "fish", "password"
+    user_create = UserCreate(username=username, password=password)
+    response = client.post("/user", json=jsonable_encoder(user_create))
+    token = Token(**response.json())
     user = _get_user(user_create.username)
     assert user is not None
-    return user
+    return user, token, password
 
 
 @pytest.mark.parametrize(
@@ -81,15 +84,30 @@ def test_jwt_sub_from_str(sub_string: str, want: JWTSub | None, exc: Exception |
         JWTSub.from_str(sub_string)
 
 
-def test_root_without_auth(client):
-    response = client.get("/")
-    assert response.status_code == status.HTTP_401_UNAUTHORIZED
-
-
 def test_post_token_non_existent_user(client):
     form_data = {"username": "username", "password": "password"}
     response = client.post("/token", data=form_data)
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_post_token(
+    user1: tuple[User, Token, str], client: TestClient, settings: Settings
+):
+    user, _, password = user1
+    form_data = {"username": user.username, "password": password}
+    response = client.post("/token", data=form_data)
+    assert response.status_code == status.HTTP_200_OK
+    token = Token(**response.json())
+    assert token.token_type == "bearer"
+    jwt_payload = jwt.decode(
+        token.access_token,
+        settings.secret_key,
+        algorithms=[settings.jwt_signing_algorithm],
+    )
+    assert jwt_payload.get("sub") is not None
+    jwt_sub = JWTSub.from_str(jwt_payload.get("sub"))
+    assert jwt_sub.username == user.username
+    assert jwt_sub.blob_id == user.blob_id
 
 
 @pytest.mark.parametrize(
@@ -111,12 +129,26 @@ def test_post_user(user_create: UserCreate, client: TestClient, settings: Settin
     assert jwt_sub.blob_id is not None
 
 
-def test_post_user_already_exists(user1: User, client: TestClient):
-    # NOTE: Have to use the plaintext password pulled from the user1 fixture
-    # because the User object only keeps the hashed password
-    payload = jsonable_encoder(UserCreate(username=user1.username, password="password"))
+def test_post_user_already_exists(user1: tuple[User, Token, str], client: TestClient):
+    user, _, password = user1
+    payload = jsonable_encoder(UserCreate(username=user.username, password=password))
     response = client.post("/user", json=payload)
     assert response.status_code == status.HTTP_409_CONFLICT
+
+
+def test_get_user_without_auth(client):
+    response = client.get("/user")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_get_user(user1: tuple[User, Token, str], client: TestClient):
+    user, token, _ = user1
+    headers = {"Authorization": f"Bearer {token.access_token}"}
+    response = client.get("/user", headers=headers)
+    assert response.status_code == status.HTTP_200_OK
+    user_get = UserGet(**response.json())
+    assert user_get.username == user.username
+    assert user_get.blob_id == user.blob_id
 
 
 def test_get_blob_without_auth(client):

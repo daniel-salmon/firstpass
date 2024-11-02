@@ -36,7 +36,7 @@ app = FastAPI()
 
 class Token(BaseModel):
     access_token: str
-    token_type: str
+    token_type: str = "bearer"
 
 
 class UserBase(BaseModel):
@@ -158,12 +158,7 @@ def _authenticate_user(username: str, password: str):
     return user
 
 
-@app.get("/", status_code=status.HTTP_200_OK)
-async def get_user(user: Annotated[User, Depends(_get_current_user)]) -> UserGet:
-    return UserGet(username=user.username, blob_id=user.blob_id)
-
-
-@app.post("/token")
+@app.post("/token", status_code=status.HTTP_200_OK)
 async def token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     settings: Annotated[Settings, Depends(_get_settings)],
@@ -180,6 +175,11 @@ async def token(
         settings=settings,
     )
     return Token(access_token=access_token, token_type="bearer")
+
+
+@app.get("/user", status_code=status.HTTP_200_OK)
+async def get_user(user: Annotated[User, Depends(_get_current_user)]) -> UserGet:
+    return UserGet(username=user.username, blob_id=user.blob_id)
 
 
 @app.post("/user", status_code=status.HTTP_201_CREATED)
