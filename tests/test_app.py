@@ -7,19 +7,38 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from app.main import app, get_settings, Blob, JWTSub, Settings, Token, UserCreate
+from app.main import (
+    app,
+    _get_settings,
+    _get_user,
+    Blob,
+    JWTSub,
+    Settings,
+    Token,
+    User,
+    UserCreate,
+)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
+def settings() -> Settings:
+    settings = _get_settings()
+    return settings
+
+
+@pytest.fixture(scope="module")
 def client() -> TestClient:
     client = TestClient(app)
     return client
 
 
-@pytest.fixture(scope="session")
-def settings() -> Settings:
-    settings = get_settings()
-    return settings
+@pytest.fixture(scope="module")
+def user1(client: TestClient) -> User:
+    user_create = UserCreate(username="fish", password="password")
+    _ = client.post("/user", json=jsonable_encoder(user_create))
+    user = _get_user(user_create.username)
+    assert user is not None
+    return user
 
 
 @pytest.mark.parametrize(
@@ -75,12 +94,11 @@ def test_post_token_non_existent_user(client):
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
-@pytest.mark.parametrize("username, password", [("username", "password")])
-def test_post_user(
-    username: str, password: str, client: TestClient, settings: Settings
-):
-    payload = jsonable_encoder(UserCreate(username=username, password=password))
-    response = client.post("/user", json=payload)
+@pytest.mark.parametrize(
+    "user_create", [UserCreate(username="username", password="password")]
+)
+def test_post_user(user_create: UserCreate, client: TestClient, settings: Settings):
+    response = client.post("/user", json=jsonable_encoder(user_create))
     assert response.status_code == status.HTTP_201_CREATED
     token = Token(**response.json())
     assert token.token_type == "bearer"
@@ -91,8 +109,16 @@ def test_post_user(
     )
     assert jwt_payload.get("sub") is not None
     jwt_sub = JWTSub.from_str(jwt_payload.get("sub"))
-    assert jwt_sub.username == username
+    assert jwt_sub.username == user_create.username
     assert jwt_sub.blob_id is not None
+
+
+def test_post_user_already_exists(user1: User, client: TestClient):
+    # NOTE: Have to use the plaintext password pulled from the user1 fixture
+    # because the User object only keeps the hashed password
+    payload = jsonable_encoder(UserCreate(username=user1.username, password="password"))
+    response = client.post("/user", json=payload)
+    assert response.status_code == status.HTTP_409_CONFLICT
 
 
 def test_get_blob_without_auth(client):

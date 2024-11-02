@@ -23,13 +23,13 @@ class Settings(BaseSettings):
 
 
 @lru_cache
-def get_settings():
+def _get_settings():
     return Settings()
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-pwd_ctx = CryptContext(schemes=[get_settings().pwd_hash_scheme])
+pwd_ctx = CryptContext(schemes=[_get_settings().pwd_hash_scheme])
 
 app = FastAPI()
 
@@ -40,7 +40,7 @@ class Token(BaseModel):
 
 
 class UserBase(BaseModel):
-    username: str
+    username: Annotated[str, StringConstraints(min_length=1)]
     password: str
 
 
@@ -112,7 +112,7 @@ def _update_user_blob(user: User, blob: Blob) -> None:
 
 async def _get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
-    settings: Annotated[Settings, Depends(get_settings)],
+    settings: Annotated[Settings, Depends(_get_settings)],
 ):
     try:
         payload = jwt.decode(
@@ -166,7 +166,7 @@ async def get_user(user: Annotated[User, Depends(_get_current_user)]) -> UserGet
 @app.post("/token")
 async def token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    settings: Annotated[Settings, Depends(get_settings)],
+    settings: Annotated[Settings, Depends(_get_settings)],
 ):
     user = _authenticate_user(form_data.username, form_data.password)
     if not user:
@@ -184,13 +184,8 @@ async def token(
 
 @app.post("/user", status_code=status.HTTP_201_CREATED)
 async def post_user(
-    new_user: UserCreate, settings: Annotated[Settings, Depends(get_settings)]
+    new_user: UserCreate, settings: Annotated[Settings, Depends(_get_settings)]
 ) -> Token:
-    if new_user.username == "":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username cannot be the empty string",
-        )
     if _get_user(new_user.username) is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
