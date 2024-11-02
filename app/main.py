@@ -115,7 +115,7 @@ async def create_user(
     hashed_password = pwd_ctx.hash(new_user.password)
     user = _set_user(User(username=new_user.username, password=hashed_password))
     access_token = _create_access_token(
-        data={"sub": f"{user.username}"},
+        data={"sub": f"username: {user.username} blob_id: {user.blob_id}"},
         settings=settings,
     )
     return Token(access_token=access_token, token_type="bearer")
@@ -160,7 +160,7 @@ async def token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = _create_access_token(
-        data={"sub": f"{user.username}"},
+        data={"sub": f"username: {user.username} blob_id: {user.blob_id}"},
         settings=settings,
     )
     return Token(access_token=access_token, token_type="bearer")
