@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
 
 @lru_cache
-def _get_settings():
+def _get_settings() -> Settings:
     return Settings()
 
 
@@ -113,7 +113,7 @@ def _update_user_blob(user: User, blob: Blob) -> None:
 async def _get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     settings: Annotated[Settings, Depends(_get_settings)],
-):
+) -> User:
     try:
         payload = jwt.decode(
             token, settings.secret_key, algorithms=[settings.jwt_signing_algorithm]
@@ -137,7 +137,7 @@ def _create_access_token(
     data: dict,
     settings: Settings,
     expires_delta: timedelta | None = None,
-):
+) -> str:
     if expires_delta is None:
         expires_delta = settings.access_token_expire_minutes
     data = data.copy()
@@ -149,7 +149,7 @@ def _create_access_token(
     return encoded_jwt
 
 
-def _authenticate_user(username: str, password: str):
+def _authenticate_user(username: str, password: str) -> User | None:
     user = _get_user(username)
     if user is None:
         return None
@@ -158,11 +158,11 @@ def _authenticate_user(username: str, password: str):
     return user
 
 
-@app.post("/token", status_code=status.HTTP_200_OK)
+@app.post("/token", status_code=status.HTTP_200_OK, response_model=Token)
 async def token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     settings: Annotated[Settings, Depends(_get_settings)],
-):
+) -> Token:
     user = _authenticate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -177,12 +177,12 @@ async def token(
     return Token(access_token=access_token, token_type="bearer")
 
 
-@app.get("/user", status_code=status.HTTP_200_OK)
+@app.get("/user", status_code=status.HTTP_200_OK, response_model=UserGet)
 async def get_user(user: Annotated[User, Depends(_get_current_user)]) -> UserGet:
     return UserGet(username=user.username, blob_id=user.blob_id)
 
 
-@app.post("/user", status_code=status.HTTP_201_CREATED)
+@app.post("/user", status_code=status.HTTP_201_CREATED, response_model=Token)
 async def post_user(
     new_user: UserCreate, settings: Annotated[Settings, Depends(_get_settings)]
 ) -> Token:
@@ -200,7 +200,7 @@ async def post_user(
     return Token(access_token=access_token, token_type="bearer")
 
 
-@app.get("/{blob_id}", status_code=status.HTTP_200_OK)
+@app.get("/blob/{blob_id}", status_code=status.HTTP_200_OK, response_model=Blob)
 async def get_blob(
     blob_id: UUID4, user: Annotated[User, Depends(_get_current_user)]
 ) -> Blob:
@@ -214,7 +214,7 @@ async def get_blob(
     return blob
 
 
-@app.put("/{blob_id}", status_code=status.HTTP_204_NO_CONTENT)
+@app.put("/blob/{blob_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def put_blob(
     blob_id: UUID4, blob: Blob, user: Annotated[User, Depends(_get_current_user)]
 ):
