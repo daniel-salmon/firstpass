@@ -167,14 +167,14 @@ def test_get_user(user1: tuple[User, Token, str], client: TestClient):
 
 
 def test_get_blob_without_auth(client):
-    response = client.get("/e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7")
+    response = client.get("/blob/e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 def test_get_blob_does_not_exist(user1: tuple[User, Token, str], client: TestClient):
     user, token, _ = user1
     response = client.get(
-        "/e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7", headers=_build_auth_header(token)
+        "/blob/e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7", headers=_build_auth_header(token)
     )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -184,13 +184,15 @@ def test_get_blob_owned_by_another_user(
 ):
     _, user1_token, _ = user1
     _user2, _, _ = user2
-    response = client.get(f"/{_user2.blob_id}", headers=_build_auth_header(user1_token))
+    response = client.get(
+        f"/blob/{_user2.blob_id}", headers=_build_auth_header(user1_token)
+    )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 def test_get_blob(user1: tuple[User, Token, str], client: TestClient):
     user, token, _ = user1
-    response = client.get(f"/{user.blob_id}", headers=_build_auth_header(token))
+    response = client.get(f"/blob/{user.blob_id}", headers=_build_auth_header(token))
     assert response.status_code == status.HTTP_200_OK
 
 
@@ -198,7 +200,7 @@ def test_put_blob_without_auth(client):
     payload = jsonable_encoder(
         Blob(blob_id="e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7", blob=b"i'm a blob")
     )
-    response = client.put("/e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7", json=payload)
+    response = client.put("/blob/e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7", json=payload)
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
@@ -206,7 +208,7 @@ def test_put_blob_does_not_exist(user1: tuple[User, Token, str], client: TestCli
     user, token, _ = user1
     blob = Blob(blob_id=UUID4("e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7"), blob=b"blob")
     response = client.put(
-        f"/{blob.blob_id}",
+        f"/blob/{blob.blob_id}",
         json=jsonable_encoder(blob),
         headers=_build_auth_header(token),
     )
@@ -220,7 +222,7 @@ def test_put_blob_owned_by_another_user(
     _user2, _, _ = user2
     user2_blob = Blob(blob_id=_user2.blob_id, blob=_user2.blob)
     response = client.put(
-        f"/{user2_blob.blob_id}",
+        f"/blob/{user2_blob.blob_id}",
         json=jsonable_encoder(user2_blob),
         headers=_build_auth_header(user1_token),
     )
@@ -231,12 +233,12 @@ def test_put_blob(user1: tuple[User, Token, str], client: TestClient):
     user, token, _ = user1
     blob = Blob(blob_id=user.blob_id, blob=b"this is (probably) a new blob")
     response = client.put(
-        f"/{user.blob_id}",
+        f"/blob/{user.blob_id}",
         json=jsonable_encoder(blob),
         headers=_build_auth_header(token),
     )
     assert response.status_code == status.HTTP_204_NO_CONTENT
-    response = client.get(f"/{user.blob_id}", headers=_build_auth_header(token))
+    response = client.get(f"/blob/{user.blob_id}", headers=_build_auth_header(token))
     got_blob = Blob(**response.json())
     assert got_blob.blob_id == blob.blob_id
     assert got_blob.blob == blob.blob
