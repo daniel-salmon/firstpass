@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from pydantic import UUID4
 from sqlmodel import Session, create_engine
 from sqlmodel.pool import StaticPool
+from sqlalchemy.engine.base import Engine
 
 from app.main import (
     app,
@@ -31,17 +32,22 @@ def settings() -> Settings:
     return settings
 
 
-@pytest.fixture(scope="module")
-def session(settings: Settings) -> Generator[Session]:
+@pytest.fixture(scope="function")
+def engine(settings: Settings) -> Engine:
     engine = create_engine(
         settings.db_url, connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
     _create_db_and_tables(engine)
+    return engine
+
+
+@pytest.fixture(scope="function")
+def session(engine: Engine) -> Generator[Session]:
     with Session(engine) as session:
         yield session
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def client(session: Session) -> Generator[TestClient]:
     def _get_session_override():
         return session
@@ -52,7 +58,7 @@ def client(session: Session) -> Generator[TestClient]:
     app.dependency_overrides.clear()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def user1(client: TestClient, session: Session) -> tuple[User, Token, str]:
     username, password = "fish", "password"
     user_create = UserCreate(username=username, password=password)
@@ -63,7 +69,7 @@ def user1(client: TestClient, session: Session) -> tuple[User, Token, str]:
     return user, token, password
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def user2(client: TestClient, session: Session) -> tuple[User, Token, str]:
     username, password = "sushi", "tuna"
     user_create = UserCreate(username=username, password=password)
