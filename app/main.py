@@ -156,7 +156,7 @@ async def _get_current_user(
         sub = JWTSub.from_str(sub_string)
         if sub.username == "":
             raise credentials_exception
-    except (AssertionError, InvalidTokenError, ValidationError):
+    except (AssertionError, InvalidTokenError, ValidationError, ValueError):
         raise credentials_exception
     user = _get_user(sub.username, session)
     if user is None or user.blob_id != sub.blob_id:
