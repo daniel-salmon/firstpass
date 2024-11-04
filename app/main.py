@@ -15,6 +15,7 @@ from pydantic.types import StringConstraints
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from sqlalchemy.engine.base import Engine
+from sqlalchemy.exc import IntegrityError
 
 
 class Settings(BaseSettings):
@@ -130,7 +131,11 @@ def _get_user(username: str, session: Session) -> User | None:
 
 def _add_user(user: User, session: Session) -> User:
     session.add(user)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise
     return user
 
 
@@ -221,15 +226,16 @@ async def post_user(
     settings: Annotated[Settings, Depends(_get_settings)],
     session: Annotated[Session, Depends(_get_session)],
 ) -> Token:
-    if _get_user(new_user.username, session) is not None:
+    hashed_password = pwd_ctx.hash(new_user.password)
+    try:
+        user = _add_user(
+            User(username=new_user.username, password=hashed_password), session
+        )
+    except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Username already exists",
         )
-    hashed_password = pwd_ctx.hash(new_user.password)
-    user = _add_user(
-        User(username=new_user.username, password=hashed_password), session
-    )
     access_token = _create_access_token(
         data={"sub": str(JWTSub(username=user.username, blob_id=user.blob_id))},
         settings=settings,
