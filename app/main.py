@@ -1,3 +1,5 @@
+from collections.abc import Generator
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Annotated, Self
@@ -8,9 +10,11 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
-from pydantic import BaseModel, Field, ValidationError, UUID4
+from pydantic import BaseModel, ValidationError, UUID4
 from pydantic.types import StringConstraints
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlalchemy.engine.base import Engine
 
 
 class Settings(BaseSettings):
@@ -20,6 +24,7 @@ class Settings(BaseSettings):
     jwt_signing_algorithm: str
     access_token_expire_minutes: timedelta
     pwd_hash_scheme: str
+    db_url: str
 
 
 @lru_cache
@@ -31,7 +36,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 pwd_ctx = CryptContext(schemes=[_get_settings().pwd_hash_scheme])
 
-app = FastAPI()
+credentials_exception = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Could not validate credentials",
+    headers={"WWW-Authenticate": "Bearer"},
+)
 
 
 class Token(BaseModel):
@@ -39,17 +48,17 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
-class UserBase(BaseModel):
-    username: Annotated[str, StringConstraints(min_length=1)]
+class UserBase(SQLModel):
+    username: str = Field(unique=True, min_length=1)
     password: str
 
 
-class Blob(BaseModel):
-    blob_id: UUID4 = Field(default_factory=uuid4)
+class Blob(SQLModel):
+    blob_id: UUID4 = Field(primary_key=True, default_factory=uuid4)
     blob: bytes | None = None
 
 
-class User(UserBase, Blob):
+class User(UserBase, Blob, table=True):
     pass
 
 
@@ -79,40 +88,63 @@ class JWTSub(BaseModel):
         """
         assert "username:" in sub_string
         assert "blob_id:" in sub_string
-        sub_dict = {}
         items = sub_string.split()
         assert len(items) == 2
+        sub_dict = {}
         for item in items:
             subs = item.split(":")
             sub_dict[subs[0]] = subs[1]
-        return cls(**sub_dict)
+        return cls(username=sub_dict["username"], blob_id=UUID4(sub_dict["blob_id"]))
 
 
-db: dict[str, User] = {}
-
-credentials_exception = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Could not validate credentials",
-    headers={"WWW-Authenticate": "Bearer"},
-)
+def _get_session() -> Generator[Session]:
+    with Session(engine) as session:
+        yield session
 
 
-def _get_user(username: str) -> User | None:
-    return db.get(username)
+def _create_db_and_tables(engine: Engine) -> None:
+    SQLModel.metadata.create_all(engine)
+    return
 
 
-def _set_user(user: User) -> User:
-    db[user.username] = user
+engine: Engine
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global engine
+    settings = _get_settings()
+    connect_args = {"check_same_thread": False}
+    engine = create_engine(settings.db_url, echo=True, connect_args=connect_args)
+    _create_db_and_tables(engine)
+    yield
+    # TODO: How to gracefully disconnected from db?
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+def _get_user(username: str, session: Session) -> User | None:
+    return session.exec(select(User).where(User.username == username)).first()
+
+
+def _add_user(user: User, session: Session) -> User:
+    session.add(user)
+    session.commit()
     return user
 
 
-def _update_user_blob(user: User, blob: Blob) -> None:
+def _update_user_blob(user: User, blob: Blob, session: Session) -> None:
     user.blob = blob.blob
+    session.add(user)
+    session.commit()
+    return
 
 
 async def _get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     settings: Annotated[Settings, Depends(_get_settings)],
+    session: Annotated[Session, Depends(_get_session)],
 ) -> User:
     try:
         payload = jwt.decode(
@@ -126,7 +158,7 @@ async def _get_current_user(
             raise credentials_exception
     except (AssertionError, InvalidTokenError, ValidationError):
         raise credentials_exception
-    user = _get_user(sub.username)
+    user = _get_user(sub.username, session)
     if user is None or user.blob_id != sub.blob_id:
         raise credentials_exception
     return user
@@ -149,8 +181,8 @@ def _create_access_token(
     return encoded_jwt
 
 
-def _authenticate_user(username: str, password: str) -> User | None:
-    user = _get_user(username)
+def _authenticate_user(username: str, password: str, session: Session) -> User | None:
+    user = _get_user(username, session)
     if user is None:
         return None
     if not pwd_ctx.verify(password, user.password):
@@ -162,8 +194,9 @@ def _authenticate_user(username: str, password: str) -> User | None:
 async def token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     settings: Annotated[Settings, Depends(_get_settings)],
+    session: Annotated[Session, Depends(_get_session)],
 ) -> Token:
-    user = _authenticate_user(form_data.username, form_data.password)
+    user = _authenticate_user(form_data.username, form_data.password, session)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -184,15 +217,19 @@ async def get_user(user: Annotated[User, Depends(_get_current_user)]) -> UserGet
 
 @app.post("/user", status_code=status.HTTP_201_CREATED, response_model=Token)
 async def post_user(
-    new_user: UserCreate, settings: Annotated[Settings, Depends(_get_settings)]
+    new_user: UserCreate,
+    settings: Annotated[Settings, Depends(_get_settings)],
+    session: Annotated[Session, Depends(_get_session)],
 ) -> Token:
-    if _get_user(new_user.username) is not None:
+    if _get_user(new_user.username, session) is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Username already exists",
         )
     hashed_password = pwd_ctx.hash(new_user.password)
-    user = _set_user(User(username=new_user.username, password=hashed_password))
+    user = _add_user(
+        User(username=new_user.username, password=hashed_password), session
+    )
     access_token = _create_access_token(
         data={"sub": str(JWTSub(username=user.username, blob_id=user.blob_id))},
         settings=settings,
@@ -216,7 +253,10 @@ async def get_blob(
 
 @app.put("/blob/{blob_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def put_blob(
-    blob_id: UUID4, blob: Blob, user: Annotated[User, Depends(_get_current_user)]
+    blob_id: UUID4,
+    blob: Blob,
+    user: Annotated[User, Depends(_get_current_user)],
+    session: Annotated[Session, Depends(_get_session)],
 ):
     if blob_id != user.blob_id:
         raise HTTPException(
@@ -224,4 +264,4 @@ async def put_blob(
             detail="Blob does not match User's blob",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    _update_user_blob(user, blob)
+    _update_user_blob(user, blob, session)

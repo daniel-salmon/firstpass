@@ -1,12 +1,17 @@
 import jwt
 import pytest
+from collections.abc import Generator
 from fastapi import status
 from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
-from pydantic import UUID4, ValidationError
+from pydantic import UUID4
+from sqlmodel import Session, create_engine
+from sqlmodel.pool import StaticPool
 
 from app.main import (
     app,
+    _create_db_and_tables,
+    _get_session,
     _get_settings,
     _get_user,
     Blob,
@@ -22,33 +27,49 @@ from app.main import (
 @pytest.fixture(scope="module")
 def settings() -> Settings:
     settings = _get_settings()
+    settings.db_url = "sqlite://"
     return settings
 
 
 @pytest.fixture(scope="module")
-def client() -> TestClient:
-    client = TestClient(app)
-    return client
+def session(settings: Settings) -> Generator[Session]:
+    engine = create_engine(
+        settings.db_url, connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    _create_db_and_tables(engine)
+    with Session(engine) as session:
+        yield session
 
 
 @pytest.fixture(scope="module")
-def user1(client: TestClient) -> tuple[User, Token, str]:
+def client(session: Session) -> Generator[TestClient]:
+    def _get_session_override():
+        return session
+
+    app.dependency_overrides[_get_session] = _get_session_override
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="module")
+def user1(client: TestClient, session: Session) -> tuple[User, Token, str]:
     username, password = "fish", "password"
     user_create = UserCreate(username=username, password=password)
     response = client.post("/user", json=jsonable_encoder(user_create))
     token = Token(**response.json())
-    user = _get_user(user_create.username)
+    user = _get_user(user_create.username, session)
     assert user is not None
     return user, token, password
 
 
 @pytest.fixture(scope="module")
-def user2(client: TestClient) -> tuple[User, Token, str]:
+def user2(client: TestClient, session: Session) -> tuple[User, Token, str]:
     username, password = "sushi", "tuna"
     user_create = UserCreate(username=username, password=password)
     response = client.post("/user", json=jsonable_encoder(user_create))
     token = Token(**response.json())
-    user = _get_user(user_create.username)
+    user = _get_user(user_create.username, session)
     assert user is not None
     return user, token, password
 
@@ -62,7 +83,10 @@ def _build_auth_header(token: Token) -> dict[str, str]:
     "sub, want",
     [
         (
-            JWTSub(username="username", blob_id="e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7"),
+            JWTSub(
+                username="username",
+                blob_id=UUID4("e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7"),
+            ),
             "username:username blob_id:e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7",
         ),
     ],
@@ -89,7 +113,7 @@ def test_jwt_sub__str__(sub: JWTSub, want: str):
             None,
             AssertionError,
         ),
-        ("username:<username> blob_id:not_a_uuid", None, ValidationError),
+        ("username:<username> blob_id:not_a_uuid", None, ValueError),
     ],
 )
 def test_jwt_sub_from_str(sub_string: str, want: JWTSub | None, exc: Exception | None):
