@@ -105,7 +105,6 @@ def _get_session() -> Generator[Session]:
 
 def _create_db_and_tables(engine: Engine) -> None:
     SQLModel.metadata.create_all(engine)
-    return
 
 
 engine: Engine
