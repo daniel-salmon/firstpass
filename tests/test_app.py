@@ -4,7 +4,7 @@ from collections.abc import Generator
 from fastapi import status
 from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
-from pydantic import UUID4
+from pydantic import BaseModel, UUID4
 from sqlmodel import Session, create_engine
 from sqlmodel.pool import StaticPool
 from sqlalchemy.engine.base import Engine
@@ -59,26 +59,32 @@ def client(session: Session) -> Generator[TestClient]:
     app.dependency_overrides.clear()
 
 
+class UserTest(BaseModel):
+    user: User
+    token: Token
+    password: str
+
+
 @pytest.fixture(scope="function")
-def user1(client: TestClient, session: Session) -> tuple[User, Token, str]:
+def user1(client: TestClient, session: Session) -> UserTest:
     username, password = "fish", "password"
     user_create = UserCreate(username=username, password=password)
     response = client.post("/user", json=jsonable_encoder(user_create))
     token = Token(**response.json())
     user = _get_user(user_create.username, session)
     assert user is not None
-    return user, token, password
+    return UserTest(user=user, token=token, password=password)
 
 
 @pytest.fixture(scope="function")
-def user2(client: TestClient, session: Session) -> tuple[User, Token, str]:
+def user2(client: TestClient, session: Session) -> UserTest:
     username, password = "sushi", "tuna"
     user_create = UserCreate(username=username, password=password)
     response = client.post("/user", json=jsonable_encoder(user_create))
     token = Token(**response.json())
     user = _get_user(user_create.username, session)
     assert user is not None
-    return user, token, password
+    return UserTest(user=user, token=token, password=password)
 
 
 def _build_auth_header(token: Token) -> dict[str, str]:
@@ -137,11 +143,8 @@ def test_post_token_non_existent_user(client):
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
-def test_post_token(
-    user1: tuple[User, Token, str], client: TestClient, settings: Settings
-):
-    user, _, password = user1
-    form_data = {"username": user.username, "password": password}
+def test_post_token(user1: UserTest, client: TestClient, settings: Settings):
+    form_data = {"username": user1.user.username, "password": user1.password}
     response = client.post("/token", data=form_data)
     assert response.status_code == status.HTTP_200_OK
     token = Token(**response.json())
@@ -153,8 +156,8 @@ def test_post_token(
     )
     assert jwt_payload.get("sub") is not None
     jwt_sub = JWTSub.from_str(jwt_payload.get("sub"))
-    assert jwt_sub.username == user.username
-    assert jwt_sub.blob_id == user.blob_id
+    assert jwt_sub.username == user1.user.username
+    assert jwt_sub.blob_id == user1.user.blob_id
 
 
 @pytest.mark.parametrize(
@@ -176,9 +179,10 @@ def test_post_user(user_create: UserCreate, client: TestClient, settings: Settin
     assert jwt_sub.blob_id is not None
 
 
-def test_post_user_already_exists(user1: tuple[User, Token, str], client: TestClient):
-    user, _, password = user1
-    payload = jsonable_encoder(UserCreate(username=user.username, password=password))
+def test_post_user_already_exists(user1: UserTest, client: TestClient):
+    payload = jsonable_encoder(
+        UserCreate(username=user1.user.username, password=user1.password)
+    )
     response = client.post("/user", json=payload)
     assert response.status_code == status.HTTP_409_CONFLICT
 
@@ -188,13 +192,12 @@ def test_get_user_without_auth(client):
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
-def test_get_user(user1: tuple[User, Token, str], client: TestClient):
-    user, token, _ = user1
-    response = client.get("/user", headers=_build_auth_header(token))
+def test_get_user(user1: UserTest, client: TestClient):
+    response = client.get("/user", headers=_build_auth_header(user1.token))
     assert response.status_code == status.HTTP_200_OK
     user_get = UserGet(**response.json())
-    assert user_get.username == user.username
-    assert user_get.blob_id == user.blob_id
+    assert user_get.username == user1.user.username
+    assert user_get.blob_id == user1.user.blob_id
 
 
 def test_get_blob_without_auth(client):
@@ -202,28 +205,27 @@ def test_get_blob_without_auth(client):
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
-def test_get_blob_does_not_exist(user1: tuple[User, Token, str], client: TestClient):
-    user, token, _ = user1
+def test_get_blob_does_not_exist(user1: UserTest, client: TestClient):
     response = client.get(
-        "/blob/e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7", headers=_build_auth_header(token)
+        "/blob/e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7",
+        headers=_build_auth_header(user1.token),
     )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 def test_get_blob_owned_by_another_user(
-    user1: tuple[User, Token, str], user2: tuple[User, Token, str], client: TestClient
+    user1: UserTest, user2: UserTest, client: TestClient
 ):
-    _, user1_token, _ = user1
-    _user2, _, _ = user2
     response = client.get(
-        f"/blob/{_user2.blob_id}", headers=_build_auth_header(user1_token)
+        f"/blob/{user2.user.blob_id}", headers=_build_auth_header(user1.token)
     )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
-def test_get_blob(user1: tuple[User, Token, str], client: TestClient):
-    user, token, _ = user1
-    response = client.get(f"/blob/{user.blob_id}", headers=_build_auth_header(token))
+def test_get_blob(user1: UserTest, client: TestClient):
+    response = client.get(
+        f"/blob/{user1.user.blob_id}", headers=_build_auth_header(user1.token)
+    )
     assert response.status_code == status.HTTP_200_OK
 
 
@@ -235,41 +237,39 @@ def test_put_blob_without_auth(client):
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
-def test_put_blob_does_not_exist(user1: tuple[User, Token, str], client: TestClient):
-    user, token, _ = user1
+def test_put_blob_does_not_exist(user1: UserTest, client: TestClient):
     blob = Blob(blob_id=UUID4("e9dae530-6f2a-4bd2-8bfc-6ea6a747f4c7"), blob=b"blob")
     response = client.put(
         f"/blob/{blob.blob_id}",
         json=jsonable_encoder(blob),
-        headers=_build_auth_header(token),
+        headers=_build_auth_header(user1.token),
     )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 def test_put_blob_owned_by_another_user(
-    user1: tuple[User, Token, str], user2: tuple[User, Token, str], client: TestClient
+    user1: UserTest, user2: UserTest, client: TestClient
 ):
-    _, user1_token, _ = user1
-    _user2, _, _ = user2
-    user2_blob = Blob(blob_id=_user2.blob_id, blob=_user2.blob)
+    blob = Blob(blob_id=user2.user.blob_id, blob=user2.user.blob)
     response = client.put(
-        f"/blob/{user2_blob.blob_id}",
-        json=jsonable_encoder(user2_blob),
-        headers=_build_auth_header(user1_token),
+        f"/blob/{blob.blob_id}",
+        json=jsonable_encoder(blob),
+        headers=_build_auth_header(user1.token),
     )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
-def test_put_blob(user1: tuple[User, Token, str], client: TestClient):
-    user, token, _ = user1
-    blob = Blob(blob_id=user.blob_id, blob=b"this is (probably) a new blob")
+def test_put_blob(user1: UserTest, client: TestClient):
+    blob = Blob(blob_id=user1.user.blob_id, blob=b"this is (probably) a new blob")
     response = client.put(
-        f"/blob/{user.blob_id}",
+        f"/blob/{user1.user.blob_id}",
         json=jsonable_encoder(blob),
-        headers=_build_auth_header(token),
+        headers=_build_auth_header(user1.token),
     )
     assert response.status_code == status.HTTP_204_NO_CONTENT
-    response = client.get(f"/blob/{user.blob_id}", headers=_build_auth_header(token))
+    response = client.get(
+        f"/blob/{user1.user.blob_id}", headers=_build_auth_header(user1.token)
+    )
     got_blob = Blob(**response.json())
     assert got_blob.blob_id == blob.blob_id
     assert got_blob.blob == blob.blob
