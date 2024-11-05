@@ -148,7 +148,7 @@ def test_post_token(
     assert token.token_type == "bearer"
     jwt_payload = jwt.decode(
         token.access_token,
-        settings.secret_key,
+        settings.secret_key.get_secret_value(),
         algorithms=[settings.jwt_signing_algorithm],
     )
     assert jwt_payload.get("sub") is not None
@@ -167,7 +167,7 @@ def test_post_user(user_create: UserCreate, client: TestClient, settings: Settin
     assert token.token_type == "bearer"
     jwt_payload = jwt.decode(
         token.access_token,
-        settings.secret_key,
+        settings.secret_key.get_secret_value(),
         algorithms=[settings.jwt_signing_algorithm],
     )
     assert jwt_payload.get("sub") is not None

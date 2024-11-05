@@ -10,7 +10,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
-from pydantic import BaseModel, ValidationError, UUID4
+from pydantic import BaseModel, SecretStr, ValidationError, UUID4
 from pydantic.types import StringConstraints
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlmodel import Field, Session, SQLModel, create_engine, select
@@ -21,7 +21,7 @@ from sqlalchemy.exc import IntegrityError
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
-    secret_key: Annotated[str, StringConstraints(min_length=64, max_length=64)]
+    secret_key: Annotated[SecretStr, StringConstraints(min_length=64, max_length=64)]
     jwt_signing_algorithm: str
     access_token_expire_minutes: timedelta
     pwd_hash_scheme: str
@@ -153,7 +153,9 @@ async def _get_current_user(
 ) -> User:
     try:
         payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.jwt_signing_algorithm]
+            token,
+            settings.secret_key.get_secret_value(),
+            algorithms=[settings.jwt_signing_algorithm],
         )
         sub_string = payload.get("sub")
         if sub_string is None:
@@ -181,7 +183,9 @@ def _create_access_token(
     exp = datetime.now(timezone.utc) + expires_delta
     data.update({"exp": exp})
     encoded_jwt = jwt.encode(
-        data, settings.secret_key, algorithm=settings.jwt_signing_algorithm
+        data,
+        settings.secret_key.get_secret_value(),
+        algorithm=settings.jwt_signing_algorithm,
     )
     return encoded_jwt
 
