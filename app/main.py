@@ -130,11 +130,7 @@ def _get_user(username: str, session: Session) -> User | None:
 
 def _add_user(user: User, session: Session) -> User:
     session.add(user)
-    try:
-        session.commit()
-    except IntegrityError:
-        session.rollback()
-        raise
+    session.commit()
     return user
 
 
