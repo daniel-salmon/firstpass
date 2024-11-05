@@ -119,7 +119,7 @@ async def lifespan(app: FastAPI):
     engine = create_engine(settings.db_url, echo=True, connect_args=connect_args)
     _create_db_and_tables(engine)
     yield
-    # TODO: How to gracefully disconnected from db?
+    engine.dispose()
 
 
 app = FastAPI(lifespan=lifespan)

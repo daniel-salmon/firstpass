@@ -33,12 +33,13 @@ def settings() -> Settings:
 
 
 @pytest.fixture(scope="function")
-def engine(settings: Settings) -> Engine:
+def engine(settings: Settings) -> Generator[Engine]:
     engine = create_engine(
         settings.db_url, connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
     _create_db_and_tables(engine)
-    return engine
+    yield engine
+    engine.dispose()
 
 
 @pytest.fixture(scope="function")
