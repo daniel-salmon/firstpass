@@ -1,6 +1,6 @@
 import pytest
 
-from firstpass.secrets import Password, Secrets
+from firstpass.lib.secrets import Password, Secrets
 
 
 @pytest.mark.parametrize(

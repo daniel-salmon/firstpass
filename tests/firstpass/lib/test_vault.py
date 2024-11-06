@@ -1,8 +1,8 @@
 import pytest
 from pathlib import Path
 
-from firstpass.vault import LocalVault, MemoryVault, Vault
-from firstpass.secrets import Secret, Password, SecretsType
+from firstpass.lib.vault import LocalVault, MemoryVault, Vault
+from firstpass.lib.secrets import Secret, Password, SecretsType
 
 
 @pytest.fixture()

@@ -257,10 +257,12 @@ dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
     { name = "passlib" },
+    { name = "pyaml" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
     { name = "sqlmodel" },
+    { name = "typer" },
 ]
 
 [package.dev-dependencies]
@@ -277,10 +279,12 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.4" },
     { name = "httpx", specifier = ">=0.27.2" },
     { name = "passlib", specifier = ">=1.7.4" },
+    { name = "pyaml", specifier = ">=24.9.0" },
     { name = "pydantic", specifier = ">=2.9.2" },
     { name = "pydantic-settings", specifier = ">=2.6.0" },
     { name = "pyjwt", specifier = ">=2.9.0" },
     { name = "sqlmodel", specifier = ">=0.0.22" },
+    { name = "typer", specifier = ">=0.12.5" },
 ]
 
 [package.metadata.requires-dev]
@@ -541,6 +545,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/2e/c8/e22c292035f1bac8b9f5237a2622305bc0304e776080b246f3df57c4ff9f/pre_commit-4.0.1.tar.gz", hash = "sha256:80905ac375958c0444c65e9cebebd948b3cdb518f335a091a670a89d652139d2", size = 191678 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/16/8f/496e10d51edd6671ebe0432e33ff800aa86775d2d147ce7d43389324a525/pre_commit-4.0.1-py2.py3-none-any.whl", hash = "sha256:efde913840816312445dc98787724647c65473daefe420785f885e8ed9a06878", size = 218713 },
+]
+
+[[package]]
+name = "pyaml"
+version = "24.9.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fd/a6/5b51160ff7ce60b0c60ec825359c0e818b0ce4a2504fa3dd1470f42f9b10/pyaml-24.9.0.tar.gz", hash = "sha256:e78dee8b0d4fed56bb9fa11a8a7858e6fade1ec70a9a122cee6736efac3e69b5", size = 28111 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a1/1b/16b79549afd3dec6d764456c07b8581134c74008d87303ba23906380fa57/pyaml-24.9.0-py3-none-any.whl", hash = "sha256:31080551502f1014852b3c966a96c796adc79b4cf86e165f28ed83455bf19c62", size = 24965 },
 ]
 
 [[package]]
