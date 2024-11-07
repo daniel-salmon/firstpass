@@ -24,6 +24,7 @@ firstpass = "firstpass.__main__:app"
 packages = ["firstpass"]
 
 [tool.uv]
+package = true
 dev-dependencies = [
     "pytest>=8.3.3",
     "pytest-cov>=5.0.0",
