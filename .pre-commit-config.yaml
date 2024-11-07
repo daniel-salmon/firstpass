@@ -20,3 +20,4 @@ repos:
       additional_dependencies:
         - "pydantic==2.9.2"
         - "sqlmodel==0.0.22"
+        - "types-pyyaml>=6.0.12.20240917"

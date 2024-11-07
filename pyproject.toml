@@ -29,4 +29,5 @@ dev-dependencies = [
     "pytest-cov>=5.0.0",
     "ruff>=0.7.0",
     "pre-commit>=4.0.1",
+    "types-pyyaml>=6.0.12.20240917",
 ]
