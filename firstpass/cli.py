@@ -1,14 +1,18 @@
+from getpass import getpass
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+from pydantic import SecretStr
 
-from firstpass import __version__, name as app_name, api_config
+from firstpass import __version__, name as app_name, api_config, api_vault
 from firstpass.lib.config import Config
 
 app = typer.Typer()
 config_app = typer.Typer()
+vault_app = typer.Typer()
 app.add_typer(config_app, name="config")
+app.add_typer(vault_app, name="vault")
 
 state: dict[str, Any] = {}
 
@@ -58,3 +62,24 @@ def set(key: str, value: str):
     config: Config = state.get("config")  # type: ignore
     config_path: Path = state.get("config_path")  # type: ignore
     api_config.set(config, key, value, config_path)
+
+
+@vault_app.command()
+def init():
+    config: Config = state.get("config")  # type: ignore
+    password = SecretStr(getpass("Please enter your password: "))
+    api_vault.init(config, password)
+
+
+@vault_app.command()
+def delete():
+    config: Config = state.get("config")  # type: ignore
+    if not config.vault_file.exists():
+        print(f"Nothing to delete, no vault file exists at {config.vault_file}")
+        raise typer.Exit()
+    delete = typer.confirm(
+        f"Are you sure you want to delete your vault at {config.vault_file}?"
+    )
+    if not delete:
+        raise typer.Abort()
+    api_vault.delete(config)
