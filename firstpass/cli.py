@@ -1,10 +1,9 @@
-from getpass import getpass
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
 from cryptography.fernet import InvalidToken
-from pydantic import SecretStr, ValidationError
+from pydantic import ValidationError
 
 from firstpass import __version__, name as app_name, api_config, api_vault
 from firstpass.lib.config import Config
@@ -112,14 +111,14 @@ def vault_init():
     if config.vault_file.exists():
         print(f"Nothing to initialize, a vault already exists at {config.vault_file}")
         raise typer.Exit()
-    password = SecretStr(getpass("Please enter your password: "))
+    password = typer.prompt("Please enter your new firstpass password", hide_input=True)
     config.vault_file.parent.mkdir(exist_ok=True, parents=True)
     config.vault_file.touch(exist_ok=True)
     api_vault.init(config, password)
 
 
-@vault_app.command()
-def delete():
+@vault_app.command(name="delete")
+def vault_delete(password: Annotated[str, typer.Option(prompt=True, hide_input=True)]):
     config: Config = state.get("config")  # type: ignore
     if not config.vault_file.exists():
         print(f"Nothing to delete, no vault file exists at {config.vault_file}")
@@ -137,8 +136,8 @@ def delete():
     print("Vault successfully deleted")
 
 
-@vault_app.command()
-def list_parts(secrets_type: SecretsType):
+@vault_app.command(name="list-parts")
+def vault_list_parts(secrets_type: SecretsType):
     secrets_name = get_name_from_secrets_type(secrets_type)
     # TODO: Update the type hint for the return value of get_name_from_secrets_type
     # it should return a BaseModel class type (but not an instance)
@@ -146,8 +145,44 @@ def list_parts(secrets_type: SecretsType):
     print("\n".join(secrets_name.model_fields.keys()))  # type: ignore
 
 
+@vault_app.command(name="new")
+def vault_new(
+    secrets_type: SecretsType,
+    password: Annotated[str, typer.Option(prompt=True, hide_input=True)],
+):
+    config: Config = state.get("config")  # type: ignore
+    secrets_name = get_name_from_secrets_type(secrets_type)
+    print(f"Let's create a new vault entry for {secrets_type}")
+    name = typer.prompt("What's the name of this entry?")
+    fields = dict.fromkeys(secrets_name.model_fields.keys())  # type: ignore
+    if "password" in fields:
+        password1 = typer.prompt("Enter the password", hide_input=True)
+        password2 = typer.prompt("Reenter the password", hide_input=True)
+        if password1 != password2:
+            print("Passwords do not match!")
+            raise typer.Abort()
+        fields["password"] = password1
+    for field in secrets_name.model_fields.keys():  # type: ignore
+        if field == "password":
+            continue
+        fields[field] = typer.prompt(f"Enter the {field}")
+    try:
+        secret = secrets_name(**fields)
+    except ValidationError:
+        # TODO: Give a better explanation
+        # Also, since all of these fields should be raw strings, perhaps this can't even happen?
+        print("One or more of your secret values can't be validated")
+        raise typer.Abort()
+    api_vault.new(config, password, secrets_type, name, secret)
+
+
 @vault_app.command(name="get")
-def vault_get(secrets_type: SecretsType, secret_part: SecretPart, name: str):
+def vault_get(
+    secrets_type: SecretsType,
+    secret_part: SecretPart,
+    name: str,
+    password: Annotated[str, typer.Option(prompt=True, hide_input=True)],
+):
     config: Config = state.get("config")  # type: ignore
     secrets_name = get_name_from_secrets_type(secrets_type)
     # TODO: Update the type hint for the return value of get_name_from_secrets_type
@@ -155,11 +190,36 @@ def vault_get(secrets_type: SecretsType, secret_part: SecretPart, name: str):
     # That should get rid of the mypy error
     if secret_part != SecretPart.all and secret_part not in secrets_name.model_fields:  # type: ignore
         print(f"Unsupported part for {secrets_type}. Refer to `list-parts`")
-        typer.Exit()
-    password = SecretStr(getpass("Please enter your password: "))
+        raise typer.Exit()
     try:
         value = api_vault.get(config, password, secrets_type, secret_part, name)
     except InvalidToken:
         print("Incorrect password")
         raise typer.Exit(1)
     print(value)
+
+
+@vault_app.command(name="set")
+def vault_set(
+    secrets_type: SecretsType,
+    secret_part: SecretPart,
+    name: str,
+    value: str,
+    password: Annotated[str, typer.Option(prompt=True, hide_input=True)],
+):
+    config: Config = state.get("config")  # type: ignore
+    secrets_name = get_name_from_secrets_type(secrets_type)
+    if secret_part == SecretPart.all:
+        print(
+            "Can't set {SecretPart.all} from the command line. Please set parts individually."
+        )
+        raise typer.Exit()
+    if secret_part not in secrets_name.model_fields:  # type: ignore
+        print(f"Unsupported part for {secrets_type}. Refer to `list-parts`")
+        raise typer.Exit()
+    try:
+        # TODO: Should there be a check / return in case no such secret exists?
+        api_vault.set(config, password, secrets_type, secret_part, name, value)
+    except InvalidToken:
+        print("Incorrect password")
+        raise typer.Exit(1)
