@@ -56,11 +56,6 @@ def version():
     print(__version__)
 
 
-@app.command()
-def echo(value: str):
-    print(value)
-
-
 @config_app.command(name="init")
 def config_init():
     config_path: Path = state.get("config_path")  # type: ignore
