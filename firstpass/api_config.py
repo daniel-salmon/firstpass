@@ -6,6 +6,11 @@ from pydantic import ValidationError
 from firstpass.lib.config import Config
 
 
+def init(config_path: Path) -> None:
+    config = Config()
+    config.to_yaml(config_path)
+
+
 def list_keys(config: Config):
     print("\n".join(config.model_dump().keys()))
 
@@ -33,6 +38,20 @@ def set(config: Config, key: str, value: str, config_path: Path) -> None:
         updated_config = _set(config, key, value)
     except AttributeError:
         print(f"{key} is not a setting")
+        return
     except ValidationError:
-        pass
+        print(
+            f"Provided value does not match schema. {key} requires type compatible with {Config.__fields__[key].annotation}"  # type:ignore
+        )
+        return
     updated_config.to_yaml(config_path)
+
+
+def reset(config_path: Path) -> None:
+    try:
+        config_path.unlink()
+    except FileNotFoundError:
+        print(f"Nothing to reset, no config file found at {config_path}")
+        return
+    init(config_path)
+    print("Config reset to default settings")
