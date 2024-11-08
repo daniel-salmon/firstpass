@@ -153,7 +153,7 @@ def vault_get(secrets_type: SecretsType, secret_part: SecretPart, name: str):
     # TODO: Update the type hint for the return value of get_name_from_secrets_type
     # it should return a BaseModel class type (but not an instance)
     # That should get rid of the mypy error
-    if secret_part != "all" and secret_part not in secrets_name.model_fields:  # type: ignore
+    if secret_part != SecretPart.all and secret_part not in secrets_name.model_fields:  # type: ignore
         print(f"Unsupported part for {secrets_type}. Refer to `list-parts`")
         typer.Exit()
     password = SecretStr(getpass("Please enter your password: "))
