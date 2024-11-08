@@ -40,7 +40,7 @@ def main(
         state["config_passed_by_user"] = True
         return
 
-    # Read the default config from disk or create a new one if it doesn't
+    # Read the default config from disk or create a new one if it doesn't exist
     config_path = default_config_path
     config_path.parent.mkdir(exist_ok=True, parents=True)
     if not config_path.exists() or config_path.stat().st_size == 0:
