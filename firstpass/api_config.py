@@ -41,7 +41,7 @@ def set(config: Config, key: str, value: str, config_path: Path) -> None:
         return
     except ValidationError:
         print(
-            f"Provided value does not match schema. {key} requires type compatible with {Config.__fields__[key].annotation}"  # type:ignore
+            f"Provided value does not match schema. {key} requires type compatible with {Config.model_fields[key].annotation}"
         )
         return
     updated_config.to_yaml(config_path)

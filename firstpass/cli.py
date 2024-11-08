@@ -8,7 +8,7 @@ from pydantic import SecretStr, ValidationError
 
 from firstpass import __version__, name as app_name, api_config, api_vault
 from firstpass.lib.config import Config
-from firstpass.lib.secrets import SecretsType
+from firstpass.lib.secrets import SecretPart, SecretsType, get_name_from_secrets_type
 
 app = typer.Typer()
 config_app = typer.Typer()
@@ -137,12 +137,28 @@ def delete():
     print("Vault successfully deleted")
 
 
+@vault_app.command()
+def list_parts(secrets_type: SecretsType):
+    secrets_name = get_name_from_secrets_type(secrets_type)
+    # TODO: Update the type hint for the return value of get_name_from_secrets_type
+    # it should return a BaseModel class type (but not an instance)
+    # That should get rid of the mypy error
+    print("\n".join(secrets_name.model_fields.keys()))  # type: ignore
+
+
 @vault_app.command(name="get")
-def vault_get(secrets_type: SecretsType, name: str):
+def vault_get(secrets_type: SecretsType, secret_part: SecretPart, name: str):
     config: Config = state.get("config")  # type: ignore
+    secrets_name = get_name_from_secrets_type(secrets_type)
+    # TODO: Update the type hint for the return value of get_name_from_secrets_type
+    # it should return a BaseModel class type (but not an instance)
+    # That should get rid of the mypy error
+    if secret_part != "all" and secret_part not in secrets_name.model_fields:  # type: ignore
+        print(f"Unsupported part for {secrets_type}. Refer to `list-parts`")
+        typer.Exit()
     password = SecretStr(getpass("Please enter your password: "))
     try:
-        value = api_vault.get(config, password, secrets_type, name)
+        value = api_vault.get(config, password, secrets_type, secret_part, name)
     except InvalidToken:
         print("Incorrect password")
         raise typer.Exit(1)

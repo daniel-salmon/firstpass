@@ -15,6 +15,9 @@ class Password(Secret):
     password: str
 
 
+SecretPart = StrEnum("SecretPart", ["all", "label", "notes", "username", "password"])
+
+
 class Secrets(BaseModel):
     passwords: dict[str, Password] | None = None
 
@@ -26,4 +29,14 @@ class Secrets(BaseModel):
         return cls(**from_json(secrets))
 
 
-SecretsType = StrEnum("SecretsType", list(Secrets.model_fields))  # type: ignore
+SecretsType = StrEnum("SecretsType", ["passwords"])
+
+
+# TODO: Update type hint of the return value to be a Pydantic BaseModel
+# type (but it is not an instance of BaseModel)
+def get_name_from_secrets_type(secrets_type: SecretsType) -> type:
+    match secrets_type:
+        case SecretsType.passwords:
+            return Password
+        case _:
+            return Secret
