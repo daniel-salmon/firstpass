@@ -49,6 +49,13 @@ def main(
     state["config_passed_by_user"] = False
 
 
+# TODO: Perhaps refactor this to set the vault object as
+# part of the application state, that way you don't have to
+# make another one later.
+# This will also allow the api_vault functions to receive a Vault
+# object directly, simplify the interface there, since all the logic
+# about deciding if the vault is cloud-based or local will be taken
+# care of centrally here.
 def password_check(password: str) -> str:
     config: Config = state.get("config")  # type: ignore
     vault_auth = api_vault.authorize(config, password)
@@ -153,7 +160,7 @@ def vault_remove(
         config.vault_file.unlink()
     except FileNotFoundError:
         pass
-    print("Vault successfully deleted")
+    print("Vault successfully removed")
 
 
 @vault_app.command(name="new")
@@ -196,8 +203,9 @@ def vault_list_names(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
-    # config: Config = state.get("config")  # type: ignore
-    pass
+    config: Config = state.get("config")  # type: ignore
+    names = api_vault.list_names(config, password, secrets_type)
+    print("\n".join(names))
 
 
 @vault_app.command(name="get")

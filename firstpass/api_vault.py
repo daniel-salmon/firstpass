@@ -28,6 +28,11 @@ def new(
     vault.set(secrets_type, name, secret)
 
 
+def list_names(config: Config, password: str, secrets_type: SecretsType) -> list[str]:
+    _ = LocalVault(password, config.vault_file)
+    return ["hi"]
+
+
 def get(
     config: Config,
     password: str,

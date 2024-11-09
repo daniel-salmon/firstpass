@@ -42,6 +42,28 @@ def test_can_open() -> None:
 
 
 @pytest.mark.parametrize(
+    "secrets",
+    [
+        (
+            [
+                (
+                    SecretsType.passwords,
+                    "login1",
+                    Password(username="fish", password="password"),
+                )
+            ]
+        ),
+    ],
+)
+def test_list_names(
+    secrets: list[tuple[SecretsType, str, Secret]], vault: Vault
+) -> None:
+    for secret in secrets:
+        vault.set(secrets_type=secret[0], name=secret[1], secret=secret[2])
+    assert False
+
+
+@pytest.mark.parametrize(
     "secrets_type, name, secret",
     [
         (
