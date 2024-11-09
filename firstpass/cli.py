@@ -117,8 +117,8 @@ def vault_init():
     api_vault.init(config, password)
 
 
-@vault_app.command(name="delete")
-def vault_delete(password: Annotated[str, typer.Option(prompt=True, hide_input=True)]):
+@vault_app.command(name="remove")
+def vault_remove(password: Annotated[str, typer.Option(prompt=True, hide_input=True)]):
     config: Config = state.get("config")  # type: ignore
     if not config.vault_file.exists():
         print(f"Nothing to delete, no vault file exists at {config.vault_file}")
@@ -176,6 +176,15 @@ def vault_new(
     api_vault.new(config, password, secrets_type, name, secret)
 
 
+@vault_app.command(name="list-names")
+def vault_list_names(
+    secrets_type: SecretsType,
+    password: Annotated[str, typer.Option(prompt=True, hide_input=True)],
+):
+    # config: Config = state.get("config")  # type: ignore
+    pass
+
+
 @vault_app.command(name="get")
 def vault_get(
     secrets_type: SecretsType,
@@ -220,6 +229,20 @@ def vault_set(
     try:
         # TODO: Should there be a check / return in case no such secret exists?
         api_vault.set(config, password, secrets_type, secret_part, name, value)
+    except InvalidToken:
+        print("Incorrect password")
+        raise typer.Exit(1)
+
+
+@vault_app.command(name="delete")
+def vault_delete(
+    secrets_type: SecretsType,
+    name: str,
+    password: Annotated[str, typer.Option(prompt=True, hide_input=True)],
+):
+    config: Config = state.get("config")  # type: ignore
+    try:
+        api_vault.delete(config, password, secrets_type, name)
     except InvalidToken:
         print("Incorrect password")
         raise typer.Exit(1)

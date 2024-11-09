@@ -44,3 +44,8 @@ def set(
         return
     setattr(secret, secret_part, value)
     vault.set(secrets_type, name, secret)
+
+
+def delete(config: Config, password: str, secrets_type: SecretsType, name: str) -> None:
+    vault = LocalVault(password, config.vault_file)
+    vault.delete(secrets_type, name)
