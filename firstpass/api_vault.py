@@ -1,6 +1,20 @@
+from pydantic import BaseModel
+
 from firstpass.lib.config import Config
 from firstpass.lib.secrets import Secret, SecretPart, SecretsType
 from firstpass.lib.vault import LocalVault
+
+
+class VaultAuth(BaseModel):
+    token: str | None = None
+    is_authorized: bool = False
+
+
+def authorize(config: Config, password: str) -> VaultAuth:
+    vault = LocalVault(password, config.vault_file)
+    if not vault.can_open():
+        return VaultAuth(token=None, is_authorized=False)
+    return VaultAuth(token=None, is_authorized=True)
 
 
 def init(config: Config, password: str):

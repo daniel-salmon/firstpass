@@ -17,6 +17,30 @@ def test_encrypt_decrypt(plaintext: bytes, vault: Vault) -> None:
     assert vault.decrypt(vault.encrypt(plaintext)) == plaintext
 
 
+def test_can_open() -> None:
+    m1 = MemoryVault(password="password")
+    m1.set(
+        secrets_type=SecretsType.passwords,
+        name="entry",
+        secret=Password(
+            label="Entry", notes="notes", username="pickles", password="strongpassword"
+        ),
+    )
+    m2 = MemoryVault(password="differentpassword")
+    m2.blob = m1.blob
+    assert not m2.can_open()
+
+    # Test that even with the same password we still can't decrypt since the salts are different
+    m2.password = m1.password
+    del m2.cipher
+    assert not m2.can_open()
+
+    # Now with equal passwords and salts we should be able to decrypt
+    m2.salt = m1.salt
+    del m2.cipher
+    assert m2.can_open()
+
+
 @pytest.mark.parametrize(
     "secrets_type, name, secret",
     [

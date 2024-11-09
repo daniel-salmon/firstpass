@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
-from cryptography.fernet import InvalidToken
 from pydantic import ValidationError
 
 from firstpass import __version__, name as app_name, api_config, api_vault
@@ -48,6 +47,15 @@ def main(
     state["config_path"] = config_path
     state["config"] = config
     state["config_passed_by_user"] = False
+
+
+def password_check(password: str) -> str:
+    config: Config = state.get("config")  # type: ignore
+    vault_auth = api_vault.authorize(config, password)
+    if not vault_auth.is_authorized:
+        raise typer.BadParameter("Invalid password")
+    state["token"] = vault_auth.token
+    return password
 
 
 @app.command()
@@ -105,6 +113,15 @@ def config_set(key: str, value: str):
     api_config.set(config, key, value, config_path)
 
 
+@vault_app.command(name="list-parts")
+def vault_list_parts(secrets_type: SecretsType):
+    secrets_name = get_name_from_secrets_type(secrets_type)
+    # TODO: Update the type hint for the return value of get_name_from_secrets_type
+    # it should return a BaseModel class type (but not an instance)
+    # That should get rid of the mypy error
+    print("\n".join(secrets_name.model_fields.keys()))  # type: ignore
+
+
 @vault_app.command(name="init")
 def vault_init():
     config: Config = state.get("config")  # type: ignore
@@ -118,7 +135,11 @@ def vault_init():
 
 
 @vault_app.command(name="remove")
-def vault_remove(password: Annotated[str, typer.Option(prompt=True, hide_input=True)]):
+def vault_remove(
+    password: Annotated[
+        str, typer.Option(prompt=True, hide_input=True, callback=password_check)
+    ],
+):
     config: Config = state.get("config")  # type: ignore
     if not config.vault_file.exists():
         print(f"Nothing to delete, no vault file exists at {config.vault_file}")
@@ -128,7 +149,6 @@ def vault_remove(password: Annotated[str, typer.Option(prompt=True, hide_input=T
     )
     if not delete:
         raise typer.Abort()
-    # TODO: Add password verification that the vault belongs to the user
     try:
         config.vault_file.unlink()
     except FileNotFoundError:
@@ -136,19 +156,12 @@ def vault_remove(password: Annotated[str, typer.Option(prompt=True, hide_input=T
     print("Vault successfully deleted")
 
 
-@vault_app.command(name="list-parts")
-def vault_list_parts(secrets_type: SecretsType):
-    secrets_name = get_name_from_secrets_type(secrets_type)
-    # TODO: Update the type hint for the return value of get_name_from_secrets_type
-    # it should return a BaseModel class type (but not an instance)
-    # That should get rid of the mypy error
-    print("\n".join(secrets_name.model_fields.keys()))  # type: ignore
-
-
 @vault_app.command(name="new")
 def vault_new(
     secrets_type: SecretsType,
-    password: Annotated[str, typer.Option(prompt=True, hide_input=True)],
+    password: Annotated[
+        str, typer.Option(prompt=True, hide_input=True, callback=password_check)
+    ],
 ):
     config: Config = state.get("config")  # type: ignore
     secrets_name = get_name_from_secrets_type(secrets_type)
@@ -179,7 +192,9 @@ def vault_new(
 @vault_app.command(name="list-names")
 def vault_list_names(
     secrets_type: SecretsType,
-    password: Annotated[str, typer.Option(prompt=True, hide_input=True)],
+    password: Annotated[
+        str, typer.Option(prompt=True, hide_input=True, callback=password_check)
+    ],
 ):
     # config: Config = state.get("config")  # type: ignore
     pass
@@ -190,7 +205,9 @@ def vault_get(
     secrets_type: SecretsType,
     name: str,
     secret_part: SecretPart,
-    password: Annotated[str, typer.Option(prompt=True, hide_input=True)],
+    password: Annotated[
+        str, typer.Option(prompt=True, hide_input=True, callback=password_check)
+    ],
 ):
     config: Config = state.get("config")  # type: ignore
     secrets_name = get_name_from_secrets_type(secrets_type)
@@ -200,11 +217,7 @@ def vault_get(
     if secret_part != SecretPart.all and secret_part not in secrets_name.model_fields:  # type: ignore
         print(f"Unsupported part for {secrets_type}. Refer to `list-parts`")
         raise typer.Exit()
-    try:
-        value = api_vault.get(config, password, secrets_type, name, secret_part)
-    except InvalidToken:
-        print("Incorrect password")
-        raise typer.Exit(1)
+    value = api_vault.get(config, password, secrets_type, name, secret_part)
     print(value)
 
 
@@ -214,7 +227,9 @@ def vault_set(
     name: str,
     secret_part: SecretPart,
     value: str,
-    password: Annotated[str, typer.Option(prompt=True, hide_input=True)],
+    password: Annotated[
+        str, typer.Option(prompt=True, hide_input=True, callback=password_check)
+    ],
 ):
     config: Config = state.get("config")  # type: ignore
     secrets_name = get_name_from_secrets_type(secrets_type)
@@ -226,23 +241,17 @@ def vault_set(
     if secret_part not in secrets_name.model_fields:  # type: ignore
         print(f"Unsupported part for {secrets_type}. Refer to `list-parts`")
         raise typer.Exit()
-    try:
-        # TODO: Should there be a check / return in case no such secret exists?
-        api_vault.set(config, password, secrets_type, name, secret_part, value)
-    except InvalidToken:
-        print("Incorrect password")
-        raise typer.Exit(1)
+    # TODO: Should there be a check / return in case no such secret exists?
+    api_vault.set(config, password, secrets_type, name, secret_part, value)
 
 
 @vault_app.command(name="delete")
 def vault_delete(
     secrets_type: SecretsType,
     name: str,
-    password: Annotated[str, typer.Option(prompt=True, hide_input=True)],
+    password: Annotated[
+        str, typer.Option(prompt=True, hide_input=True, callback=password_check)
+    ],
 ):
     config: Config = state.get("config")  # type: ignore
-    try:
-        api_vault.delete(config, password, secrets_type, name)
-    except InvalidToken:
-        print("Incorrect password")
-        raise typer.Exit(1)
+    api_vault.delete(config, password, secrets_type, name)
