@@ -188,8 +188,8 @@ def vault_list_names(
 @vault_app.command(name="get")
 def vault_get(
     secrets_type: SecretsType,
-    secret_part: SecretPart,
     name: str,
+    secret_part: SecretPart,
     password: Annotated[str, typer.Option(prompt=True, hide_input=True)],
 ):
     config: Config = state.get("config")  # type: ignore
@@ -211,8 +211,8 @@ def vault_get(
 @vault_app.command(name="set")
 def vault_set(
     secrets_type: SecretsType,
-    secret_part: SecretPart,
     name: str,
+    secret_part: SecretPart,
     value: str,
     password: Annotated[str, typer.Option(prompt=True, hide_input=True)],
 ):
