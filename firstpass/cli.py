@@ -201,7 +201,7 @@ def vault_get(
         print(f"Unsupported part for {secrets_type}. Refer to `list-parts`")
         raise typer.Exit()
     try:
-        value = api_vault.get(config, password, secrets_type, secret_part, name)
+        value = api_vault.get(config, password, secrets_type, name, secret_part)
     except InvalidToken:
         print("Incorrect password")
         raise typer.Exit(1)
@@ -228,7 +228,7 @@ def vault_set(
         raise typer.Exit()
     try:
         # TODO: Should there be a check / return in case no such secret exists?
-        api_vault.set(config, password, secrets_type, secret_part, name, value)
+        api_vault.set(config, password, secrets_type, name, secret_part, value)
     except InvalidToken:
         print("Incorrect password")
         raise typer.Exit(1)

@@ -18,8 +18,8 @@ def get(
     config: Config,
     password: str,
     secrets_type: SecretsType,
-    secret_part: SecretPart,
     name: str,
+    secret_part: SecretPart,
 ) -> Secret | None:
     vault = LocalVault(password, config.vault_file)
     secret = vault.get(secrets_type, name)
@@ -34,8 +34,8 @@ def set(
     config: Config,
     password: str,
     secrets_type: SecretsType,
-    secret_part: SecretPart,
     name: str,
+    secret_part: SecretPart,
     value: str,
 ) -> None:
     vault = LocalVault(password, config.vault_file)
