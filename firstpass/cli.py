@@ -4,9 +4,10 @@ from typing import Annotated, Any
 import typer
 from pydantic import ValidationError
 
-from firstpass import __version__, name as app_name, api_config, api_vault
+from firstpass import __version__, name as app_name, api_config
 from firstpass.lib.config import Config
 from firstpass.lib.secrets import SecretPart, SecretsType, get_name_from_secrets_type
+from firstpass.lib.vault import LocalVault, Vault
 
 app = typer.Typer()
 config_app = typer.Typer()
@@ -15,7 +16,7 @@ app.add_typer(config_app, name="config")
 app.add_typer(vault_app, name="vault")
 
 state: dict[str, Any] = dict.fromkeys(
-    ["config", "config_path", "config_passed_by_user"]
+    ["config", "config_path", "config_passed_by_user", "vault"]
 )
 default_config_path = Path(typer.get_app_dir(app_name)) / "config.yaml"
 
@@ -49,19 +50,15 @@ def main(
     state["config_passed_by_user"] = False
 
 
-# TODO: Perhaps refactor this to set the vault object as
-# part of the application state, that way you don't have to
-# make another one later.
-# This will also allow the api_vault functions to receive a Vault
-# object directly, simplify the interface there, since all the logic
-# about deciding if the vault is cloud-based or local will be taken
-# care of centrally here.
 def password_check(password: str) -> str:
     config: Config = state.get("config")  # type: ignore
-    vault_auth = api_vault.authorize(config, password)
-    if not vault_auth.is_authorized:
+    if not config.vault_file.exists():
+        print(f"No vault exists at {config.vault_file}. Create one with vault init")
+        raise typer.Exit()
+    vault = LocalVault(password, config.vault_file)
+    if not vault.can_open():
         raise typer.BadParameter("Invalid password")
-    state["token"] = vault_auth.token
+    state["vault"] = vault
     return password
 
 
@@ -135,10 +132,18 @@ def vault_init():
     if config.vault_file.exists():
         print(f"Nothing to initialize, a vault already exists at {config.vault_file}")
         raise typer.Exit()
-    password = typer.prompt("Please enter your new firstpass password", hide_input=True)
+    password1 = typer.prompt(
+        "Please enter your new firstpass password", hide_input=True
+    )
+    password2 = typer.prompt(
+        "Please re-entery your new firstpass password", hide_input=True
+    )
+    if password1 != password2:
+        print("Passwords do not match, try again")
+        raise typer.Abort()
     config.vault_file.parent.mkdir(exist_ok=True, parents=True)
     config.vault_file.touch(exist_ok=True)
-    api_vault.init(config, password)
+    LocalVault(password1, config.vault_file)
 
 
 @vault_app.command(name="remove")
@@ -148,9 +153,6 @@ def vault_remove(
     ],
 ):
     config: Config = state.get("config")  # type: ignore
-    if not config.vault_file.exists():
-        print(f"Nothing to delete, no vault file exists at {config.vault_file}")
-        raise typer.Exit()
     delete = typer.confirm(
         f"Are you sure you want to delete your vault at {config.vault_file}?"
     )
@@ -170,7 +172,7 @@ def vault_new(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
-    config: Config = state.get("config")  # type: ignore
+    vault: Vault = state.get("vault")  # type: ignore
     secrets_name = get_name_from_secrets_type(secrets_type)
     print(f"Let's create a new vault entry for {secrets_type}")
     name = typer.prompt("What's the name of this entry?")
@@ -193,7 +195,7 @@ def vault_new(
         # Also, since all of these fields should be raw strings, perhaps this can't even happen?
         print("One or more of your secret values can't be validated")
         raise typer.Abort()
-    api_vault.new(config, password, secrets_type, name, secret)
+    vault.set(secrets_type, name, secret)
 
 
 @vault_app.command(name="list-names")
@@ -203,9 +205,8 @@ def vault_list_names(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
-    config: Config = state.get("config")  # type: ignore
-    names = api_vault.list_names(config, password, secrets_type)
-    print("\n".join(names))
+    vault: Vault = state.get("vault")  # type: ignore
+    print("\n".join(vault.list_names(secrets_type)))
 
 
 @vault_app.command(name="get")
@@ -217,7 +218,7 @@ def vault_get(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
-    config: Config = state.get("config")  # type: ignore
+    vault: Vault = state.get("vault")  # type: ignore
     secrets_name = get_name_from_secrets_type(secrets_type)
     # TODO: Update the type hint for the return value of get_name_from_secrets_type
     # it should return a BaseModel class type (but not an instance)
@@ -225,8 +226,13 @@ def vault_get(
     if secret_part != SecretPart.all and secret_part not in secrets_name.model_fields:  # type: ignore
         print(f"Unsupported part for {secrets_type}. Refer to `list-parts`")
         raise typer.Exit()
-    value = api_vault.get(config, password, secrets_type, name, secret_part)
-    print(value)
+    if (secret := vault.get(secrets_type, name)) is None:
+        print(f"No secret called {name} exists in your vault under type {secrets_type}")
+        raise typer.Exit()
+    if secret_part == SecretPart.all:
+        print(secret)
+        raise typer.Exit()
+    print(getattr(secret, secret_part))
 
 
 @vault_app.command(name="set")
@@ -239,7 +245,7 @@ def vault_set(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
-    config: Config = state.get("config")  # type: ignore
+    vault: Vault = state.get("vault")  # type: ignore
     secrets_name = get_name_from_secrets_type(secrets_type)
     if secret_part == SecretPart.all:
         print(
@@ -249,8 +255,11 @@ def vault_set(
     if secret_part not in secrets_name.model_fields:  # type: ignore
         print(f"Unsupported part for {secrets_type}. Refer to `list-parts`")
         raise typer.Exit()
-    # TODO: Should there be a check / return in case no such secret exists?
-    api_vault.set(config, password, secrets_type, name, secret_part, value)
+    if (secret := vault.get(secrets_type, name)) is None:
+        print(f"No secret called {name} exists in your vault under type {secrets_type}")
+        raise typer.Exit()
+    setattr(secret, secret_part, value)
+    vault.set(secrets_type, name, secret)
 
 
 @vault_app.command(name="delete")
@@ -261,5 +270,5 @@ def vault_delete(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
-    config: Config = state.get("config")  # type: ignore
-    api_vault.delete(config, password, secrets_type, name)
+    vault: Vault = state.get("vault")  # type: ignore
+    vault.delete(secrets_type, name)
