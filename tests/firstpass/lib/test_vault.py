@@ -102,17 +102,17 @@ def test_list_names(secret_groups: list[SecretGroup], vault: Vault) -> None:
     "secrets_type, name, secret",
     [
         (
-            SecretsType.passwords,  # type: ignore
+            SecretsType.passwords,
             "login1",
             Password(username="fish", password="password"),
         ),
         (
-            SecretsType.passwords,  # type: ignore
+            SecretsType.passwords,
             "login2",
             Password(username="jumbalaya", password="password2!xjbopajpoiabpoijweg"),
         ),
         (
-            SecretsType.passwords,  # type: ignore
+            SecretsType.passwords,
             "ajapdfipjwe",
             Password(username="pete", password="pebpjqefvp92!$T$!))"),
         ),
@@ -135,7 +135,7 @@ def test_set_get_delete(
     "secrets_type, name, secret",
     [
         (
-            SecretsType.passwords,  # type: ignore
+            SecretsType.passwords,
             "pybites",
             Password(username="pybites", password="super-secret-password"),
         ),

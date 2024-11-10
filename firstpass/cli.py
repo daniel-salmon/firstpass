@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, TypedDict
 
 import typer
 from pydantic import ValidationError
@@ -15,9 +15,21 @@ vault_app = typer.Typer()
 app.add_typer(config_app, name="config")
 app.add_typer(vault_app, name="vault")
 
-state: dict[str, Any] = dict.fromkeys(
-    ["config", "config_path", "config_passed_by_user", "vault"]
+State = TypedDict(
+    "State",
+    {
+        "config": Config | None,
+        "config_path": Path | None,
+        "config_passed_by_user": bool,
+        "vault": Vault | None,
+    },
 )
+state: State = {
+    "config": None,
+    "config_path": None,
+    "config_passed_by_user": False,
+    "vault": None,
+}
 default_config_path = Path(typer.get_app_dir(app_name)) / "config.yaml"
 
 
@@ -51,7 +63,8 @@ def main(
 
 
 def password_check(password: str) -> str:
-    config: Config = state.get("config")  # type: ignore
+    config = state.get("config")
+    assert config is not None
     if not config.vault_file.exists():
         print(f"No vault exists at {config.vault_file}. Create one with vault init")
         raise typer.Exit()
@@ -69,7 +82,8 @@ def version():
 
 @config_app.command(name="init")
 def config_init():
-    config_path: Path = state.get("config_path")  # type: ignore
+    config_path = state.get("config_path")
+    assert config_path is not None
     if not state["config_passed_by_user"]:
         print(f"Default config written to {config_path}")
         typer.Exit()
@@ -94,26 +108,30 @@ def config_init():
 
 @config_app.command()
 def reset():
-    config_path: Path = state.get("config_path")  # type: ignore
+    config_path = state.get("config_path")
+    assert config_path is not None
     api_config.reset(config_path)
 
 
 @config_app.command()
 def list_keys():
-    config: Config = state.get("config")  # type: ignore
+    config = state.get("config")
+    assert config is not None
     api_config.list_keys(config)
 
 
 @config_app.command(name="get")
 def config_get(key: str):
-    config: Config = state.get("config")  # type: ignore
+    config = state.get("config")
+    assert config is not None
     api_config.get(config, key)
 
 
 @config_app.command(name="set")
 def config_set(key: str, value: str):
-    config: Config = state.get("config")  # type: ignore
-    config_path: Path = state.get("config_path")  # type: ignore
+    config = state.get("config")
+    config_path = state.get("config_path")
+    assert config is not None and config_path is not None
     api_config.set(config, key, value, config_path)
 
 
@@ -125,7 +143,8 @@ def vault_list_parts(secrets_type: SecretsType):
 
 @vault_app.command(name="init")
 def vault_init():
-    config: Config = state.get("config")  # type: ignore
+    config = state.get("config")
+    assert config is not None
     if config.vault_file.exists():
         print(f"Nothing to initialize, a vault already exists at {config.vault_file}")
         raise typer.Exit()
@@ -149,7 +168,8 @@ def vault_remove(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
-    config: Config = state.get("config")  # type: ignore
+    config = state.get("config")
+    assert config is not None
     delete = typer.confirm(
         f"Are you sure you want to delete your vault at {config.vault_file}?"
     )
@@ -169,7 +189,8 @@ def vault_new(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
-    vault: Vault = state.get("vault")  # type: ignore
+    vault = state.get("vault")
+    assert vault is not None
     secrets_name = get_name_from_secrets_type(secrets_type)
     print(f"Let's create a new vault entry for {secrets_type}")
     name = typer.prompt("What's the name of this entry?")
@@ -202,7 +223,8 @@ def vault_list_names(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
-    vault: Vault = state.get("vault")  # type: ignore
+    vault = state.get("vault")
+    assert vault is not None
     print("\n".join(vault.list_names(secrets_type)))
 
 
@@ -215,7 +237,8 @@ def vault_get(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
-    vault: Vault = state.get("vault")  # type: ignore
+    vault = state.get("vault")
+    assert vault is not None
     secrets_name = get_name_from_secrets_type(secrets_type)
     if secret_part != SecretPart.all and secret_part not in secrets_name.model_fields:
         print(f"Unsupported part for {secrets_type}. Refer to `list-parts`")
@@ -239,7 +262,8 @@ def vault_set(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
-    vault: Vault = state.get("vault")  # type: ignore
+    vault = state.get("vault")
+    assert vault is not None
     secrets_name = get_name_from_secrets_type(secrets_type)
     if secret_part == SecretPart.all:
         print(
@@ -264,5 +288,6 @@ def vault_delete(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
-    vault: Vault = state.get("vault")  # type: ignore
+    vault = state.get("vault")
+    assert vault is not None
     vault.delete(secrets_type, name)
