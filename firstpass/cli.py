@@ -120,10 +120,7 @@ def config_set(key: str, value: str):
 @vault_app.command(name="list-parts")
 def vault_list_parts(secrets_type: SecretsType):
     secrets_name = get_name_from_secrets_type(secrets_type)
-    # TODO: Update the type hint for the return value of get_name_from_secrets_type
-    # it should return a BaseModel class type (but not an instance)
-    # That should get rid of the mypy error
-    print("\n".join(secrets_name.model_fields.keys()))  # type: ignore
+    print("\n".join(secrets_name.model_fields.keys()))
 
 
 @vault_app.command(name="init")
@@ -176,7 +173,7 @@ def vault_new(
     secrets_name = get_name_from_secrets_type(secrets_type)
     print(f"Let's create a new vault entry for {secrets_type}")
     name = typer.prompt("What's the name of this entry?")
-    fields = dict.fromkeys(secrets_name.model_fields.keys())  # type: ignore
+    fields = dict.fromkeys(secrets_name.model_fields.keys())
     if "password" in fields:
         password1 = typer.prompt("Enter the password", hide_input=True)
         password2 = typer.prompt("Reenter the password", hide_input=True)
@@ -184,7 +181,7 @@ def vault_new(
             print("Passwords do not match!")
             raise typer.Abort()
         fields["password"] = password1
-    for field in secrets_name.model_fields.keys():  # type: ignore
+    for field in secrets_name.model_fields.keys():
         if field == "password":
             continue
         fields[field] = typer.prompt(f"Enter the {field}")
@@ -220,10 +217,7 @@ def vault_get(
 ):
     vault: Vault = state.get("vault")  # type: ignore
     secrets_name = get_name_from_secrets_type(secrets_type)
-    # TODO: Update the type hint for the return value of get_name_from_secrets_type
-    # it should return a BaseModel class type (but not an instance)
-    # That should get rid of the mypy error
-    if secret_part != SecretPart.all and secret_part not in secrets_name.model_fields:  # type: ignore
+    if secret_part != SecretPart.all and secret_part not in secrets_name.model_fields:
         print(f"Unsupported part for {secrets_type}. Refer to `list-parts`")
         raise typer.Exit()
     if (secret := vault.get(secrets_type, name)) is None:
@@ -252,7 +246,7 @@ def vault_set(
             "Can't set {SecretPart.all} from the command line. Please set parts individually."
         )
         raise typer.Exit()
-    if secret_part not in secrets_name.model_fields:  # type: ignore
+    if secret_part not in secrets_name.model_fields:
         print(f"Unsupported part for {secrets_type}. Refer to `list-parts`")
         raise typer.Exit()
     if (secret := vault.get(secrets_type, name)) is None:

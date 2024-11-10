@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Self
+from typing import Self, Type
 
 from pydantic import BaseModel
 from pydantic_core import from_json
@@ -32,9 +32,7 @@ class Secrets(BaseModel):
 SecretsType = StrEnum("SecretsType", ["passwords"])
 
 
-# TODO: Update type hint of the return value to be a Pydantic BaseModel
-# type (but it is not an instance of BaseModel)
-def get_name_from_secrets_type(secrets_type: SecretsType) -> type:
+def get_name_from_secrets_type(secrets_type: SecretsType) -> Type[Secret]:
     match secrets_type:
         case SecretsType.passwords:
             return Password
