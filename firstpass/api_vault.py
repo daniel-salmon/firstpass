@@ -29,8 +29,9 @@ def new(
 
 
 def list_names(config: Config, password: str, secrets_type: SecretsType) -> list[str]:
-    _ = LocalVault(password, config.vault_file)
-    return ["hi"]
+    vault = LocalVault(password, config.vault_file)
+    names = sorted(vault.list_names(secrets_type))
+    return names
 
 
 def get(

@@ -71,6 +71,8 @@ class Vault(ABC):
     def list_names(self, secrets_type: SecretsType) -> set[str]:
         secrets = self.fetch_secrets()
         subsecrets = getattr(secrets, secrets_type)
+        if subsecrets is None:
+            return set()
         return set(subsecrets.keys())
 
     def get(self, secrets_type: SecretsType, name: str) -> Secret | None:

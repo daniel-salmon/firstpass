@@ -1,8 +1,18 @@
+from collections import defaultdict
+from dataclasses import dataclass
+
 import pytest
 from pathlib import Path
 
 from firstpass.lib.vault import LocalVault, MemoryVault, Vault
 from firstpass.lib.secrets import Secret, Password, SecretsType
+
+
+@dataclass
+class SecretGroup:
+    secrets_type: SecretsType
+    name: str
+    secret: Secret
 
 
 @pytest.fixture()
@@ -42,25 +52,50 @@ def test_can_open() -> None:
 
 
 @pytest.mark.parametrize(
-    "secrets",
+    "secret_groups",
     [
+        ([]),
         (
             [
-                (
-                    SecretsType.passwords,
-                    "login1",
-                    Password(username="fish", password="password"),
-                )
+                SecretGroup(
+                    secrets_type=SecretsType.passwords,
+                    name="login1",
+                    secret=Password(username="fish", password="password"),
+                ),
+            ]
+        ),
+        (
+            [
+                SecretGroup(
+                    secrets_type=SecretsType.passwords,
+                    name="login1",
+                    secret=Password(username="fish", password="password"),
+                ),
+                SecretGroup(
+                    secrets_type=SecretsType.passwords,
+                    name="login2",
+                    secret=Password(username="fish", password="password"),
+                ),
+                SecretGroup(
+                    secrets_type=SecretsType.passwords,
+                    name="login3",
+                    secret=Password(username="fish", password="password"),
+                ),
             ]
         ),
     ],
 )
-def test_list_names(
-    secrets: list[tuple[SecretsType, str, Secret]], vault: Vault
-) -> None:
-    for secret in secrets:
-        vault.set(secrets_type=secret[0], name=secret[1], secret=secret[2])
-    assert False
+def test_list_names(secret_groups: list[SecretGroup], vault: Vault) -> None:
+    expected_names = defaultdict(set)
+    for secret_group in secret_groups:
+        expected_names[secret_group.secrets_type].add(secret_group.name)
+        vault.set(
+            secrets_type=secret_group.secrets_type,
+            name=secret_group.name,
+            secret=secret_group.secret,
+        )
+    for secrets_type in SecretsType:
+        assert vault.list_names(secrets_type) == expected_names[secrets_type]
 
 
 @pytest.mark.parametrize(
