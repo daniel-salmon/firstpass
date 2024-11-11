@@ -9,6 +9,10 @@ class Secret(BaseModel):
     label: str | None = None
     notes: str | None = None
 
+    @classmethod
+    def list_parts(cls) -> set[str]:
+        return set(cls.model_fields.keys())
+
 
 class Password(Secret):
     username: str

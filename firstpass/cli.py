@@ -164,7 +164,7 @@ def config_set(key: str, value: str):
 @vault_app.command(name="list-parts")
 def vault_list_parts(secrets_type: SecretsType):
     secrets_name = get_name_from_secrets_type(secrets_type)
-    print("\n".join(secrets_name.model_fields.keys()))
+    print("\n".join(sorted(secrets_name.list_parts())))
 
 
 @vault_app.command(name="init")
