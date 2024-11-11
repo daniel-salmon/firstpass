@@ -21,3 +21,15 @@ class Config(BaseModel):
             # Use the Pydantic model's JSON serializer to ensure Python objects get
             # serialized correctly for YAML
             yaml.dump(json.loads(self.json()), f)
+
+    def list_keys(self) -> set[str]:
+        return set(self.model_dump().keys())
+
+
+def update_config(config: Config, key: str, value: str) -> Config:
+    if not hasattr(config, key):
+        raise AttributeError
+    config_dict = config.model_dump()
+    config_dict[key] = value
+    config = Config(**config_dict)
+    return config

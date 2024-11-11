@@ -5,8 +5,8 @@ import pyperclip
 import typer
 from pydantic import SecretStr, ValidationError
 
-from firstpass import __version__, name as app_name, api_config
-from firstpass.lib.config import Config
+from firstpass import __version__, name as app_name
+from firstpass.lib.config import Config, update_config
 from firstpass.lib.secrets import SecretPart, SecretsType, get_name_from_secrets_type
 from firstpass.lib.vault import LocalVault, Vault
 
@@ -55,9 +55,11 @@ def main(
     # Read the default config from disk or create a new one if it doesn't exist
     config_path = default_config_path
     config_path.parent.mkdir(exist_ok=True, parents=True)
-    if not config_path.exists() or config_path.stat().st_size == 0:
-        api_config.init(config_path)
-    config = Config.from_yaml(config_path)
+    if config_path.exists():
+        config = Config.from_yaml(config_path)
+    else:
+        config = Config()
+        config.to_yaml(config_path)
     state["config_path"] = config_path
     state["config"] = config
     state["config_passed_by_user"] = False
@@ -103,7 +105,8 @@ def config_init():
             config_path.unlink()
         except FileNotFoundError:
             pass
-    api_config.init(config_path)
+    config = Config()
+    config.to_yaml(config_path)
     print(f"Default config written to {config_path}")
 
 
@@ -111,21 +114,33 @@ def config_init():
 def reset():
     config_path = state.get("config_path")
     assert config_path is not None
-    api_config.reset(config_path)
+    try:
+        config_path.unlink()
+    except FileNotFoundError:
+        print(f"Nothing to reset, no config file found at {config_path}")
+        raise typer.Exit()
+    config = Config()
+    config.to_yaml(config_path)
+    print("Config reset to default settings")
 
 
 @config_app.command()
 def list_keys():
     config = state.get("config")
     assert config is not None
-    api_config.list_keys(config)
+    print("\n".join(sorted(config.list_keys())))
 
 
 @config_app.command(name="get")
 def config_get(key: str):
     config = state.get("config")
     assert config is not None
-    api_config.get(config, key)
+    try:
+        value = getattr(config, key)
+    except AttributeError:
+        print(f"{key} is not a config setting")
+        raise typer.Exit()
+    print(f"{key}={value}")
 
 
 @config_app.command(name="set")
@@ -133,7 +148,17 @@ def config_set(key: str, value: str):
     config = state.get("config")
     config_path = state.get("config_path")
     assert config is not None and config_path is not None
-    api_config.set(config, key, value, config_path)
+    try:
+        updated_config = update_config(config, key, value)
+    except AttributeError:
+        print(f"{key} is not a config setting")
+        raise typer.Exit()
+    except ValidationError:
+        print(
+            f"Provided value does not match schema. {key} requires type compatible with {Config.model_fields[key].annotation}"
+        )
+        raise typer.Exit()
+    updated_config.to_yaml(config_path)
 
 
 @vault_app.command(name="list-parts")
