@@ -1,8 +1,9 @@
 from pathlib import Path
 from typing import Annotated, TypedDict
 
+import pyperclip
 import typer
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from firstpass import __version__, name as app_name, api_config
 from firstpass.lib.config import Config
@@ -236,6 +237,8 @@ def vault_get(
     password: Annotated[
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
+    show: bool = False,
+    copy: bool = False,
 ):
     vault = state.get("vault")
     assert vault is not None
@@ -249,7 +252,17 @@ def vault_get(
     if secret_part == SecretPart.all:
         print(secret)
         raise typer.Exit()
-    print(getattr(secret, secret_part))
+    value: str | SecretStr = getattr(secret, secret_part)
+    if copy:
+        if isinstance(value, SecretStr):
+            pyperclip.copy(value.get_secret_value())
+        else:
+            pyperclip.copy(value)
+    if show and secret_part == SecretPart.password:
+        assert isinstance(value, SecretStr)
+        print(value.get_secret_value())
+        raise typer.Exit()
+    print(value)
 
 
 @vault_app.command(name="set")

@@ -1,8 +1,9 @@
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
-from pathlib import Path
+from pydantic import SecretStr
 
 from firstpass.lib.vault import LocalVault, MemoryVault, Vault
 from firstpass.lib.secrets import Secret, Password, SecretsType
@@ -33,7 +34,10 @@ def test_can_open() -> None:
         secrets_type=SecretsType.passwords,
         name="entry",
         secret=Password(
-            label="Entry", notes="notes", username="pickles", password="strongpassword"
+            label="Entry",
+            notes="notes",
+            username="pickles",
+            password=SecretStr("strongpassword"),
         ),
     )
     m2 = MemoryVault(password="differentpassword")
@@ -60,7 +64,7 @@ def test_can_open() -> None:
                 SecretGroup(
                     secrets_type=SecretsType.passwords,
                     name="login1",
-                    secret=Password(username="fish", password="password"),
+                    secret=Password(username="fish", password=SecretStr("password")),
                 ),
             ]
         ),
@@ -69,17 +73,17 @@ def test_can_open() -> None:
                 SecretGroup(
                     secrets_type=SecretsType.passwords,
                     name="login1",
-                    secret=Password(username="fish", password="password"),
+                    secret=Password(username="fish", password=SecretStr("password")),
                 ),
                 SecretGroup(
                     secrets_type=SecretsType.passwords,
                     name="login2",
-                    secret=Password(username="fish", password="password"),
+                    secret=Password(username="fish", password=SecretStr("password")),
                 ),
                 SecretGroup(
                     secrets_type=SecretsType.passwords,
                     name="login3",
-                    secret=Password(username="fish", password="password"),
+                    secret=Password(username="fish", password=SecretStr("password")),
                 ),
             ]
         ),
@@ -104,17 +108,20 @@ def test_list_names(secret_groups: list[SecretGroup], vault: Vault) -> None:
         (
             SecretsType.passwords,
             "login1",
-            Password(username="fish", password="password"),
+            Password(username="fish", password=SecretStr("password")),
         ),
         (
             SecretsType.passwords,
             "login2",
-            Password(username="jumbalaya", password="password2!xjbopajpoiabpoijweg"),
+            Password(
+                username="jumbalaya",
+                password=SecretStr("password2!xjbopajpoiabpoijweg"),
+            ),
         ),
         (
             SecretsType.passwords,
             "ajapdfipjwe",
-            Password(username="pete", password="pebpjqefvp92!$T$!))"),
+            Password(username="pete", password=SecretStr("pebpjqefvp92!$T$!))")),
         ),
     ],
 )
@@ -137,7 +144,7 @@ def test_set_get_delete(
         (
             SecretsType.passwords,
             "pybites",
-            Password(username="pybites", password="super-secret-password"),
+            Password(username="pybites", password=SecretStr("super-secret-password")),
         ),
     ],
 )

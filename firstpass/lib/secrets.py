@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import Self, Type
 
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr, field_serializer
 from pydantic_core import from_json
 
 
@@ -12,7 +12,11 @@ class Secret(BaseModel):
 
 class Password(Secret):
     username: str
-    password: str
+    password: SecretStr
+
+    @field_serializer("password")
+    def serialize(self, value: SecretStr) -> str:
+        return value.get_secret_value()
 
 
 SecretPart = StrEnum("SecretPart", ["all", "label", "notes", "username", "password"])
