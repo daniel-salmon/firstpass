@@ -6,7 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from firstpass import __version__
-from firstpass.cli import app
+from firstpass.cli import app, default_config_path
 from firstpass.lib.config import Config
 
 
@@ -55,10 +55,10 @@ def invalid_schema_config_test(tmp_path: Path) -> ConfigTest:
     return config_test
 
 
-def firstpass_cli(command: str, want_exit_code: int) -> str:
-    result = runner.invoke(app, shlex.split(command))
-    assert result.exit_code == want_exit_code
-    return result.stdout.strip()
+@pytest.fixture(scope="function")
+def default_config() -> ConfigTest:
+    config_test = ConfigTest(config=Config(), config_path=default_config_path)
+    return config_test
 
 
 # This is used to test the main callback on the CLI which gets invoked on every command
@@ -77,11 +77,36 @@ def test_version(
     config_test_str: str, want_exit_code: int, request: pytest.FixtureRequest
 ):
     config_test = request.getfixturevalue(config_test_str)
-    command = f"--config-path {config_test.config_path} version"
-    output = firstpass_cli(command, want_exit_code)
+    command = shlex.split(f"--config-path {config_test.config_path} version")
+    result = runner.invoke(app, command)
+    assert result.exit_code == want_exit_code
     if want_exit_code != 0:
         return
+    output = result.stdout.strip()
     assert output == __version__
+
+
+@pytest.mark.parametrize(
+    "config_test_str, command_input, want_exit_code",
+    [
+        ("default_config", None, 1),
+    ],
+)
+def test_config_init(
+    config_test_str: str,
+    command_input: str | None,
+    want_exit_code: int,
+    request: pytest.FixtureRequest,
+):
+    config_test = request.getfixturevalue(config_test_str)
+    command = shlex.split(f"--config-path {config_test.config_path} config init")
+    # breakpoint()
+    result = runner.invoke(app, command, input=command_input)
+    assert result.exit_code == want_exit_code
+    if want_exit_code != 0:
+        return
+    new_config = Config.from_yaml(config_test.config_path)
+    assert new_config == Config()
 
 
 @pytest.mark.parametrize(
@@ -95,8 +120,9 @@ def test_config_reset(
     config_test_str: str, want_exit_code: int, request: pytest.FixtureRequest
 ):
     config_test = request.getfixturevalue(config_test_str)
-    command = f"--config-path {config_test.config_path} config reset"
-    _ = firstpass_cli(command, want_exit_code)
+    command = shlex.split(f"--config-path {config_test.config_path} config reset")
+    result = runner.invoke(app, command)
+    assert result.exit_code == want_exit_code
     if want_exit_code != 0:
         return
     config = Config.from_yaml(config_test.config_path)
@@ -114,10 +140,12 @@ def test_config_list_keys(
     config_test_str: str, want_exit_code: int, request: pytest.FixtureRequest
 ):
     config_test = request.getfixturevalue(config_test_str)
-    command = f"--config-path {config_test.config_path} config list-keys"
-    output = firstpass_cli(command, want_exit_code)
+    command = shlex.split(f"--config-path {config_test.config_path} config list-keys")
+    result = runner.invoke(app, command)
+    assert result.exit_code == want_exit_code
     if want_exit_code != 0:
         return
+    output = result.stdout.strip()
     got = set(output.split("\n"))
     assert got == config_test.config.list_keys()
 
@@ -137,10 +165,12 @@ def test_config_get(
     config_test_str: str, key: str, want_exit_code: int, request: pytest.FixtureRequest
 ):
     config_test = request.getfixturevalue(config_test_str)
-    command = f"--config-path {config_test.config_path} config get {key}"
-    output = firstpass_cli(command, want_exit_code)
+    command = shlex.split(f"--config-path {config_test.config_path} config get {key}")
+    result = runner.invoke(app, command)
+    assert result.exit_code == want_exit_code
     if want_exit_code != 0:
         return
+    output = result.stdout.strip()
     value = str(getattr(config_test.config, key))
     assert value in output
 
@@ -166,8 +196,11 @@ def test_config_set(
     request: pytest.FixtureRequest,
 ):
     config_test = request.getfixturevalue(config_test_str)
-    command = f"--config-path {config_test.config_path} config set {key} {value}"
-    _ = firstpass_cli(command, want_exit_code)
+    command = shlex.split(
+        f"--config-path {config_test.config_path} config set {key} {value}"
+    )
+    result = runner.invoke(app, command)
+    assert result.exit_code == want_exit_code
     if want_exit_code != 0:
         return
     if Config.model_fields[key].annotation is bool:
