@@ -187,7 +187,7 @@ def vault_init():
         "Please enter your new firstpass password", hide_input=True
     )
     password2 = typer.prompt(
-        "Please re-entery your new firstpass password", hide_input=True
+        "Please re-enter your new firstpass password", hide_input=True
     )
     if password1 != password2:
         print("Passwords do not match, try again")
