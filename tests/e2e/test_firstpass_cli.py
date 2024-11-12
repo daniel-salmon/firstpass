@@ -6,7 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from firstpass import __version__
-from firstpass.cli import app, default_config_path
+from firstpass.cli import app
 from firstpass.lib.config import Config
 
 
@@ -15,7 +15,7 @@ runner = CliRunner()
 
 @dataclass
 class ConfigTest:
-    config: Config
+    config: Config | None
     config_path: Path
 
 
@@ -41,47 +41,31 @@ def vault_config_test(tmp_path: Path) -> ConfigTest:
 @pytest.fixture(scope="function")
 def nonexistent_config_test(tmp_path: Path) -> ConfigTest:
     config_path = tmp_path / "config.yaml"
-    config_test = ConfigTest(config=Config(), config_path=config_path)
+    config_test = ConfigTest(config=None, config_path=config_path)
+    return config_test
+
+
+@pytest.fixture(scope="function")
+def exists_but_empty_config_test(tmp_path: Path) -> ConfigTest:
+    config_path = tmp_path / "config.yaml"
+    config_path.touch()
+    config_test = ConfigTest(config=None, config_path=config_path)
     return config_test
 
 
 @pytest.fixture(scope="function")
 def invalid_schema_config_test(tmp_path: Path) -> ConfigTest:
     config_path = tmp_path / "config.yaml"
-    config = Config()
     with open(config_path, "w", encoding="utf-8") as f:
         f.write("not a valid config")
-    config_test = ConfigTest(config=config, config_path=config_path)
+    config_test = ConfigTest(config=None, config_path=config_path)
     return config_test
 
 
-@pytest.fixture(scope="function")
-def default_config() -> ConfigTest:
-    config_test = ConfigTest(config=Config(), config_path=default_config_path)
-    return config_test
-
-
-# This is used to test the main callback on the CLI which gets invoked on every command
-# That's why something as simple as testing the version number has so many input parameters
-# and can return non-zero exit codes!
-@pytest.mark.parametrize(
-    "config_test_str, want_exit_code",
-    [
-        ("default_config_test", 0),
-        ("vault_config_test", 0),
-        ("nonexistent_config_test", 1),
-        ("invalid_schema_config_test", 1),
-    ],
-)
-def test_version(
-    config_test_str: str, want_exit_code: int, request: pytest.FixtureRequest
-):
-    config_test = request.getfixturevalue(config_test_str)
-    command = shlex.split(f"--config-path {config_test.config_path} version")
+def test_version():
+    command = shlex.split("version")
     result = runner.invoke(app, command)
-    assert result.exit_code == want_exit_code
-    if want_exit_code != 0:
-        return
+    assert result.exit_code == 0
     output = result.stdout.strip()
     assert output == __version__
 
@@ -89,55 +73,28 @@ def test_version(
 @pytest.mark.parametrize(
     "config_test_str, command_input, want_exit_code",
     [
-        ("default_config", None, 1),
         ("default_config_test", "n\n", 1),
         ("default_config_test", "y\n", 0),
         ("vault_config_test", "n\n", 1),
         ("vault_config_test", "y\n", 0),
         ("nonexistent_config_test", None, 0),
+        ("exists_but_empty_config_test", None, 0),
     ],
 )
-def test_config_init(
+def test_init_config(
     config_test_str: str,
     command_input: str | None,
     want_exit_code: int,
     request: pytest.FixtureRequest,
 ):
     config_test = request.getfixturevalue(config_test_str)
-    command = shlex.split(f"--config-path {config_test.config_path} config init")
+    command = shlex.split(f"init config --config-path {config_test.config_path}")
     result = runner.invoke(app, command, input=command_input)
-    print(result.stdout)
     assert result.exit_code == want_exit_code
     if want_exit_code != 0:
         return
     new_config = Config.from_yaml(config_test.config_path)
     assert new_config == Config()
-
-
-def test_config_init_default():
-    command = shlex.split("config init")
-    result = runner.invoke(app, command)
-    assert result.exit_code == 1
-
-
-@pytest.mark.parametrize(
-    "config_test_str, want_exit_code",
-    [
-        ("default_config_test", 0),
-        ("vault_config_test", 0),
-    ],
-)
-def test_config_reset(
-    config_test_str: str, want_exit_code: int, request: pytest.FixtureRequest
-):
-    config_test = request.getfixturevalue(config_test_str)
-    command = shlex.split(f"--config-path {config_test.config_path} config reset")
-    result = runner.invoke(app, command)
-    assert result.exit_code == want_exit_code
-    if want_exit_code != 0:
-        return
-    config = Config.from_yaml(config_test.config_path)
-    assert config == Config()
 
 
 @pytest.mark.parametrize(
@@ -151,7 +108,7 @@ def test_config_list_keys(
     config_test_str: str, want_exit_code: int, request: pytest.FixtureRequest
 ):
     config_test = request.getfixturevalue(config_test_str)
-    command = shlex.split(f"--config-path {config_test.config_path} config list-keys")
+    command = shlex.split(f"config --config-path {config_test.config_path} list-keys")
     result = runner.invoke(app, command)
     assert result.exit_code == want_exit_code
     if want_exit_code != 0:
@@ -176,7 +133,7 @@ def test_config_get(
     config_test_str: str, key: str, want_exit_code: int, request: pytest.FixtureRequest
 ):
     config_test = request.getfixturevalue(config_test_str)
-    command = shlex.split(f"--config-path {config_test.config_path} config get {key}")
+    command = shlex.split(f"config --config-path {config_test.config_path} get {key}")
     result = runner.invoke(app, command)
     assert result.exit_code == want_exit_code
     if want_exit_code != 0:
@@ -208,7 +165,7 @@ def test_config_set(
 ):
     config_test = request.getfixturevalue(config_test_str)
     command = shlex.split(
-        f"--config-path {config_test.config_path} config set {key} {value}"
+        f"config --config-path {config_test.config_path} set {key} {value}"
     )
     result = runner.invoke(app, command)
     assert result.exit_code == want_exit_code

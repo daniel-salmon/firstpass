@@ -10,58 +10,42 @@ from firstpass.lib.config import Config, update_config
 from firstpass.lib.secrets import SecretPart, SecretsType, get_name_from_secrets_type
 from firstpass.lib.vault import LocalVault, Vault
 
-app = typer.Typer()
-config_app = typer.Typer()
-vault_app = typer.Typer()
-app.add_typer(config_app, name="config")
-app.add_typer(vault_app, name="vault")
-
 State = TypedDict(
     "State",
     {
         "config": Config | None,
         "config_path": Path | None,
-        "config_passed_by_user": bool,
         "vault": Vault | None,
     },
 )
 state: State = {
     "config": None,
     "config_path": None,
-    "config_passed_by_user": False,
     "vault": None,
 }
 default_config_path = Path(typer.get_app_dir(app_name)) / "config.yaml"
 
 
-@app.callback()
-def main(
+def load_config(
     config_path: Annotated[Path | None, typer.Option(help="Path to config")] = None,
 ):
-    state["config_passed_by_user"] = config_path is not None
-    if config_path is not None and config_path != default_config_path:
-        try:
-            config = Config.from_yaml(config_path)
-        except FileNotFoundError:
-            print(f"No config exists at {config_path}")
-            raise typer.Exit(1)
-        except ValidationError:
-            print("Provided config has invalid schema. Maybe generate a new one?")
-            raise typer.Exit(1)
-        state["config_path"] = config_path
-        state["config"] = config
-        return
-
-    # Read the default config from disk or create a new one if it doesn't exist
-    config_path = default_config_path
-    config_path.parent.mkdir(exist_ok=True, parents=True)
-    if config_path.exists():
+    if config_path is None:
+        config_path = default_config_path
+    try:
         config = Config.from_yaml(config_path)
-    else:
-        config = Config()
-        config.to_yaml(config_path)
+    except FileNotFoundError:
+        print(
+            f"No config exists at {config_path}. Maybe generate a new one with `init config`?"
+        )
+        raise typer.Exit(1)
+    except ValidationError:
+        print(
+            "Provided config has invalid schema. Maybe generate a new one with `init config`?"
+        )
+        raise typer.Exit(1)
     state["config_path"] = config_path
     state["config"] = config
+    return
 
 
 def password_check(password: str) -> str:
@@ -70,7 +54,7 @@ def password_check(password: str) -> str:
         raise AssertionError("config is None")
     if not config.vault_file.exists():
         print(f"No vault exists at {config.vault_file}. Create one with vault init")
-        raise typer.Exit()
+        raise typer.Exit(1)
     vault = LocalVault(password, config.vault_file)
     if not vault.can_open():
         raise typer.BadParameter("Invalid password")
@@ -78,29 +62,29 @@ def password_check(password: str) -> str:
     return password
 
 
+app = typer.Typer()
+init_app = typer.Typer()
+config_app = typer.Typer(callback=load_config)
+vault_app = typer.Typer(callback=load_config)
+app.add_typer(init_app, name="init")
+app.add_typer(config_app, name="config")
+app.add_typer(vault_app, name="vault")
+
+
 @app.command()
 def version():
     print(__version__)
 
 
-@config_app.command(name="init")
-def config_init():
-    config_path = state.get("config_path")
+@init_app.command(name="config")
+def init_config(
+    config_path: Annotated[Path | None, typer.Option(help="Path to config")] = None,
+):
     if config_path is None:
-        raise AssertionError("config_path is None")
-    if not state["config_passed_by_user"]:
-        print(
-            f"The config at the default path {config_path} doesn't need initialed. Perhaps you want `reset`?"
-        )
-        raise typer.Exit(1)
-    if config_path == default_config_path:
-        print(
-            "That's the default config path, it's initialized by default. Perhaps you want `reset`?"
-        )
-        raise typer.Exit(1)
+        config_path = default_config_path
     if config_path.exists() and config_path.stat().st_size > 0:
         overwrite = typer.confirm(
-            "Config already exists there. Are you sure you want to overwrite?"
+            "Config already exists there. Are you sure you want to overwrite? This will reset the config to default settings."
         )
         if not overwrite:
             raise typer.Abort()
@@ -111,21 +95,6 @@ def config_init():
     config = Config()
     config.to_yaml(config_path)
     print(f"Default config written to {config_path}")
-
-
-@config_app.command(name="reset")
-def config_reset():
-    config_path = state.get("config_path")
-    if config_path is None:
-        raise AssertionError("config_path is None")
-    try:
-        config_path.unlink()
-    except FileNotFoundError:
-        print(f"Nothing to reset, no config file found at {config_path}")
-        raise typer.Exit(1)
-    config = Config()
-    config.to_yaml(config_path)
-    print("Config reset to default settings")
 
 
 @config_app.command(name="list-keys")
