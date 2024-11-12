@@ -91,7 +91,7 @@ def config_init():
         raise AssertionError("config_path is None")
     if not state["config_passed_by_user"]:
         print(f"Default config written to {config_path}")
-        typer.Exit()
+        raise typer.Exit()
     if config_path == default_config_path:
         print(
             "That's the default config path, it's initialized by default. Perhaps you want `reset`?"
