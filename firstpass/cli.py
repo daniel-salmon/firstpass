@@ -112,8 +112,8 @@ def config_init():
     print(f"Default config written to {config_path}")
 
 
-@config_app.command()
-def reset():
+@config_app.command(name="reset")
+def config_reset():
     config_path = state.get("config_path")
     if config_path is None:
         raise AssertionError("config_path is None")
@@ -121,14 +121,14 @@ def reset():
         config_path.unlink()
     except FileNotFoundError:
         print(f"Nothing to reset, no config file found at {config_path}")
-        raise typer.Exit()
+        raise typer.Exit(1)
     config = Config()
     config.to_yaml(config_path)
     print("Config reset to default settings")
 
 
-@config_app.command()
-def list_keys():
+@config_app.command(name="list-keys")
+def config_list_keys():
     config = state.get("config")
     if config is None:
         raise AssertionError("config is None")
