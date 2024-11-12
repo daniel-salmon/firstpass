@@ -96,7 +96,7 @@ def config_init():
         print(
             "That's the default config path, it's initialized by default. Perhaps you want `reset`?"
         )
-        raise typer.Exit()
+        raise typer.Exit(1)
     if config_path.exists() and config_path.stat().st_size > 0:
         overwrite = typer.confirm(
             "Config already exists there. Are you sure you want to overwrite?"
@@ -144,7 +144,7 @@ def config_get(key: str):
         value = getattr(config, key)
     except AttributeError:
         print(f"{key} is not a config setting")
-        raise typer.Exit()
+        raise typer.Exit(1)
     print(f"{key}={value}")
 
 
@@ -160,12 +160,12 @@ def config_set(key: str, value: str):
         updated_config = update_config(config, key, value)
     except AttributeError:
         print(f"{key} is not a config setting")
-        raise typer.Exit()
+        raise typer.Exit(1)
     except ValidationError:
         print(
             f"Provided value does not match schema. {key} requires type compatible with {Config.model_fields[key].annotation}"
         )
-        raise typer.Exit()
+        raise typer.Exit(1)
     updated_config.to_yaml(config_path)
 
 
