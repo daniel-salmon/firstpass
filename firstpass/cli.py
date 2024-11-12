@@ -67,7 +67,8 @@ def main(
 
 def password_check(password: str) -> str:
     config = state.get("config")
-    assert config is not None
+    if config is None:
+        raise AssertionError("config is None")
     if not config.vault_file.exists():
         print(f"No vault exists at {config.vault_file}. Create one with vault init")
         raise typer.Exit()
@@ -86,7 +87,8 @@ def version():
 @config_app.command(name="init")
 def config_init():
     config_path = state.get("config_path")
-    assert config_path is not None
+    if config_path is None:
+        raise AssertionError("config_path is None")
     if not state["config_passed_by_user"]:
         print(f"Default config written to {config_path}")
         typer.Exit()
@@ -113,7 +115,8 @@ def config_init():
 @config_app.command()
 def reset():
     config_path = state.get("config_path")
-    assert config_path is not None
+    if config_path is None:
+        raise AssertionError("config_path is None")
     try:
         config_path.unlink()
     except FileNotFoundError:
@@ -127,14 +130,16 @@ def reset():
 @config_app.command()
 def list_keys():
     config = state.get("config")
-    assert config is not None
+    if config is None:
+        raise AssertionError("config is None")
     print("\n".join(sorted(config.list_keys())))
 
 
 @config_app.command(name="get")
 def config_get(key: str):
     config = state.get("config")
-    assert config is not None
+    if config is None:
+        raise AssertionError("config is None")
     try:
         value = getattr(config, key)
     except AttributeError:
@@ -147,7 +152,10 @@ def config_get(key: str):
 def config_set(key: str, value: str):
     config = state.get("config")
     config_path = state.get("config_path")
-    assert config is not None and config_path is not None
+    if config is None:
+        raise AssertionError("config is None")
+    if config_path is None:
+        raise AssertionError("config_path is None")
     try:
         updated_config = update_config(config, key, value)
     except AttributeError:
@@ -170,7 +178,8 @@ def vault_list_parts(secrets_type: SecretsType):
 @vault_app.command(name="init")
 def vault_init():
     config = state.get("config")
-    assert config is not None
+    if config is None:
+        raise AssertionError("config is None")
     if config.vault_file.exists():
         print(f"Nothing to initialize, a vault already exists at {config.vault_file}")
         raise typer.Exit()
@@ -195,7 +204,8 @@ def vault_remove(
     ],
 ):
     config = state.get("config")
-    assert config is not None
+    if config is None:
+        raise AssertionError("config is None")
     delete = typer.confirm(
         f"Are you sure you want to delete your vault at {config.vault_file}?"
     )
@@ -216,7 +226,8 @@ def vault_new(
     ],
 ):
     vault = state.get("vault")
-    assert vault is not None
+    if vault is None:
+        raise AssertionError("vault is None")
     secrets_name = get_name_from_secrets_type(secrets_type)
     print(f"Let's create a new vault entry for {secrets_type}")
     name = typer.prompt("What's the name of this entry?")
@@ -250,7 +261,8 @@ def vault_list_names(
     ],
 ):
     vault = state.get("vault")
-    assert vault is not None
+    if vault is None:
+        raise AssertionError("vault is None")
     print("\n".join(vault.list_names(secrets_type)))
 
 
@@ -266,7 +278,8 @@ def vault_get(
     copy: bool = False,
 ):
     vault = state.get("vault")
-    assert vault is not None
+    if vault is None:
+        raise AssertionError("vault is None")
     secrets_name = get_name_from_secrets_type(secrets_type)
     if secret_part != SecretPart.all and secret_part not in secrets_name.model_fields:
         print(f"Unsupported part for {secrets_type}. Refer to `list-parts`")
@@ -284,7 +297,8 @@ def vault_get(
         else:
             pyperclip.copy(value)
     if show and secret_part == SecretPart.password:
-        assert isinstance(value, SecretStr)
+        if not isinstance(value, SecretStr):
+            raise AssertionError("value is not of type SecretStr")
         print(value.get_secret_value())
         raise typer.Exit()
     print(value)
@@ -301,7 +315,8 @@ def vault_set(
     ],
 ):
     vault = state.get("vault")
-    assert vault is not None
+    if vault is None:
+        raise AssertionError("vault is None")
     secrets_name = get_name_from_secrets_type(secrets_type)
     if secret_part == SecretPart.all:
         print(
@@ -327,5 +342,6 @@ def vault_delete(
     ],
 ):
     vault = state.get("vault")
-    assert vault is not None
+    if vault is None:
+        raise AssertionError("vault is None")
     vault.delete(secrets_type, name)
