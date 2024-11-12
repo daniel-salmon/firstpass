@@ -38,6 +38,7 @@ default_config_path = Path(typer.get_app_dir(app_name)) / "config.yaml"
 def main(
     config_path: Annotated[Path | None, typer.Option(help="Path to config")] = None,
 ):
+    state["config_passed_by_user"] = config_path is not None
     if config_path is not None and config_path != default_config_path:
         try:
             config = Config.from_yaml(config_path)
@@ -49,7 +50,6 @@ def main(
             raise typer.Exit(1)
         state["config_path"] = config_path
         state["config"] = config
-        state["config_passed_by_user"] = True
         return
 
     # Read the default config from disk or create a new one if it doesn't exist
@@ -62,7 +62,6 @@ def main(
         config.to_yaml(config_path)
     state["config_path"] = config_path
     state["config"] = config
-    state["config_passed_by_user"] = False
 
 
 def password_check(password: str) -> str:
@@ -90,8 +89,10 @@ def config_init():
     if config_path is None:
         raise AssertionError("config_path is None")
     if not state["config_passed_by_user"]:
-        print(f"Default config written to {config_path}")
-        raise typer.Exit()
+        print(
+            f"The config at the default path {config_path} doesn't need initialed. Perhaps you want `reset`?"
+        )
+        raise typer.Exit(1)
     if config_path == default_config_path:
         print(
             "That's the default config path, it's initialized by default. Perhaps you want `reset`?"

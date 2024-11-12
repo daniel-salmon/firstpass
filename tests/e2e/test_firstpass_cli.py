@@ -90,6 +90,11 @@ def test_version(
     "config_test_str, command_input, want_exit_code",
     [
         ("default_config", None, 1),
+        ("default_config_test", "n\n", 1),
+        ("default_config_test", "y\n", 0),
+        ("vault_config_test", "n\n", 1),
+        ("vault_config_test", "y\n", 0),
+        ("nonexistent_config_test", None, 0),
     ],
 )
 def test_config_init(
@@ -100,13 +105,19 @@ def test_config_init(
 ):
     config_test = request.getfixturevalue(config_test_str)
     command = shlex.split(f"--config-path {config_test.config_path} config init")
-    # breakpoint()
     result = runner.invoke(app, command, input=command_input)
+    print(result.stdout)
     assert result.exit_code == want_exit_code
     if want_exit_code != 0:
         return
     new_config = Config.from_yaml(config_test.config_path)
     assert new_config == Config()
+
+
+def test_config_init_default():
+    command = shlex.split("config init")
+    result = runner.invoke(app, command)
+    assert result.exit_code == 1
 
 
 @pytest.mark.parametrize(
