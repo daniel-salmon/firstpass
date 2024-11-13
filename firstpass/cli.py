@@ -292,15 +292,17 @@ def vault_set(
         print(
             "Can't set {SecretPart.all} from the command line. Please set parts individually."
         )
-        raise typer.Exit()
+        raise typer.Exit(1)
     if secret_part not in secrets_name.model_fields:
         print(f"Unsupported part for {secrets_type}. Refer to `list-parts`")
-        raise typer.Exit()
+        raise typer.Exit(1)
     if (secret := vault.get(secrets_type, name)) is None:
         print(f"No secret called {name} exists in your vault under type {secrets_type}")
-        raise typer.Exit()
-    setattr(secret, secret_part, value)
-    vault.set(secrets_type, name, secret)
+        raise typer.Exit(1)
+    secret_dict = secret.dict()
+    secret_dict[secret_part] = value
+    updated_secret = secrets_name(**secret_dict)
+    vault.set(secrets_type, name, updated_secret)
 
 
 @vault_app.command(name="delete")
