@@ -253,10 +253,10 @@ def vault_get(
     secrets_name = get_name_from_secrets_type(secrets_type)
     if secret_part != SecretPart.all and secret_part not in secrets_name.model_fields:
         print(f"Unsupported part for {secrets_type}. Refer to `list-parts`")
-        raise typer.Exit()
+        raise typer.Exit(1)
     if (secret := vault.get(secrets_type, name)) is None:
         print(f"No secret called {name} exists in your vault under type {secrets_type}")
-        raise typer.Exit()
+        raise typer.Exit(1)
     if secret_part == SecretPart.all:
         print(secret)
         raise typer.Exit()

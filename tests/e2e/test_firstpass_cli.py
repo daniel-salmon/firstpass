@@ -1,6 +1,7 @@
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import SecretStr
@@ -345,6 +346,244 @@ def test_vault_list_names(
 
 
 @pytest.mark.parametrize(
+    "config_test_str, secrets_type, name, secret_part, show, copy, want_exit_code",
+    [
+        (
+            "existing_empty_vault_config_test",
+            SecretsType.passwords,
+            "name_that_doesnt_exist",
+            SecretPart.all,
+            True,
+            True,
+            1,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.all,
+            False,
+            False,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.all,
+            False,
+            True,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.all,
+            True,
+            False,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.all,
+            True,
+            True,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "pickles",
+            SecretPart.label,
+            False,
+            False,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "pickles",
+            SecretPart.label,
+            False,
+            True,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "pickles",
+            SecretPart.label,
+            True,
+            False,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "pickles",
+            SecretPart.label,
+            True,
+            True,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "tickles",
+            SecretPart.notes,
+            False,
+            False,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "tickles",
+            SecretPart.notes,
+            False,
+            True,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "tickles",
+            SecretPart.notes,
+            True,
+            False,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "tickles",
+            SecretPart.notes,
+            True,
+            True,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "tickles",
+            SecretPart.username,
+            False,
+            False,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "tickles",
+            SecretPart.username,
+            False,
+            True,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "tickles",
+            SecretPart.username,
+            True,
+            False,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "tickles",
+            SecretPart.username,
+            True,
+            True,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "tickles",
+            SecretPart.password,
+            False,
+            False,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "tickles",
+            SecretPart.password,
+            False,
+            True,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "tickles",
+            SecretPart.password,
+            True,
+            False,
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "tickles",
+            SecretPart.password,
+            True,
+            True,
+            0,
+        ),
+    ],
+)
+@patch("firstpass.cli.pyperclip.copy")
+def test_vault_get(
+    pyperclip_mock: MagicMock,
+    config_test_str: str,
+    secrets_type: SecretsType,
+    name: str,
+    secret_part: SecretPart,
+    show: bool,
+    copy: bool,
+    want_exit_code: int,
+    request: pytest.FixtureRequest,
+):
+    config_test = request.getfixturevalue(config_test_str)
+    passworded_command_input = f"{config_test.password}\n"
+    command = shlex.split(
+        f"vault --config-path {config_test.config_path} get {secrets_type} {name} {secret_part} {'--show' if show else ''} {'--copy' if copy else ''}"
+    )
+    result = runner.invoke(app, command, input=passworded_command_input)
+    assert result.exit_code == want_exit_code
+    if want_exit_code != 0:
+        return
+    vault = LocalVault(
+        password=config_test.password, file=config_test.config.vault_file
+    )
+    output = result.stdout.strip().split("\n")
+    # Remove the Password: prompt
+    output.pop(0)
+    if secret_part == SecretPart.all:
+        pyperclip_mock.assert_not_called()
+        assert output[-1] == str(vault.get(secrets_type, name))
+        return
+    value = getattr(vault.get(secrets_type, name), secret_part)
+    if secret_part == SecretPart.password and show:
+        assert output[-1] == value.get_secret_value()
+    else:
+        assert output[-1] == str(value)
+    if not copy:
+        pyperclip_mock.assert_not_called()
+        return
+    pyperclip_mock.assert_called_with(
+        value if secret_part != SecretPart.password else value.get_secret_value()
+    )
+
+
+@pytest.mark.parametrize(
     "config_test_str, secrets_type, name, secret_part, value, want_exit_code",
     [
         (
@@ -361,6 +600,14 @@ def test_vault_list_names(
             "pizza",
             SecretPart.all,
             "irrelevant",
+            1,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "name_that_doesnt_exist",
+            SecretPart.password,
+            "newpassword",
             1,
         ),
         (
