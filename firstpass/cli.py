@@ -152,7 +152,7 @@ def vault_init():
         raise AssertionError("config is None")
     if config.vault_file.exists():
         print(f"Nothing to initialize, a vault already exists at {config.vault_file}")
-        raise typer.Exit()
+        raise typer.Exit(1)
     password1 = typer.prompt(
         "Please enter your new firstpass password", hide_input=True
     )
