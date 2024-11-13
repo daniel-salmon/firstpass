@@ -353,9 +353,14 @@ def test_vault_list_names(
             "existing_empty_vault_config_test",
             SecretsType.passwords,
             "pybites",
-            Password(username="daniel", password=SecretStr("password")),
-            "pybites\npassword\ndifferentpassword\n",
-            1,
+            Password(
+                label="PyBites",
+                notes="notes",
+                username="daniel",
+                password=SecretStr("password"),
+            ),
+            "pybites\npassword\ndifferentpassword\npassword\ndifferentpassword\npassword\npassword\nPyBites\nnotes\ndaniel\n",
+            0,
         ),
         (
             "existing_empty_vault_config_test",
