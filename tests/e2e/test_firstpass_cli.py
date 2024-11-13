@@ -12,6 +12,7 @@ from firstpass.cli import app
 from firstpass.lib.config import Config
 from firstpass.lib.secrets import (
     Password,
+    Secret,
     SecretPart,
     SecretsType,
     get_name_from_secrets_type,
@@ -343,6 +344,83 @@ def test_vault_list_names(
     output.pop(0)
     assert len(output) == len(want_names)
     assert set(output) == want_names
+
+
+@pytest.mark.parametrize(
+    "config_test_str, secrets_type, name, want_secret, command_input, want_exit_code",
+    [
+        (
+            "existing_empty_vault_config_test",
+            SecretsType.passwords,
+            "pybites",
+            Password(username="daniel", password=SecretStr("password")),
+            "pybites\npassword\ndifferentpassword\n",
+            1,
+        ),
+        (
+            "existing_empty_vault_config_test",
+            SecretsType.passwords,
+            "pybites",
+            Password(
+                label="PyBites",
+                notes="notes",
+                username="daniel",
+                password=SecretStr("password"),
+            ),
+            "pybites\npassword\npassword\nPyBites\nnotes\ndaniel\n",
+            0,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "pizza",
+            Password(
+                label="PyBites",
+                notes="notes",
+                username="daniel",
+                password=SecretStr("password"),
+            ),
+            "pizza\n",
+            1,
+        ),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "pepperoni",
+            Password(
+                label="Pepperoni",
+                notes="pizza",
+                username="hungry",
+                password=SecretStr("cheese"),
+            ),
+            "pepperoni\ncheese\ncheese\nPepperoni\npizza\nhungry\n",
+            0,
+        ),
+    ],
+)
+def test_vault_new(
+    config_test_str: str,
+    secrets_type: SecretsType,
+    name: str,
+    want_secret: Secret,
+    command_input: str,
+    want_exit_code: int,
+    request: pytest.FixtureRequest,
+):
+    config_test = request.getfixturevalue(config_test_str)
+    passworded_command_input = "\n".join((config_test.password, command_input))
+    command = shlex.split(
+        f"vault --config-path {config_test.config_path} new {secrets_type}"
+    )
+    result = runner.invoke(app, command, input=passworded_command_input)
+    assert result.exit_code == want_exit_code
+    if want_exit_code != 0:
+        return
+    vault = LocalVault(
+        password=config_test.password, file=config_test.config.vault_file
+    )
+    got_secret = vault.get(secrets_type, name)
+    assert got_secret == want_secret
 
 
 @pytest.mark.parametrize(

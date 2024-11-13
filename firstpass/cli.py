@@ -201,6 +201,11 @@ def vault_new(
     secrets_name = get_name_from_secrets_type(secrets_type)
     print(f"Let's create a new vault entry for {secrets_type}")
     name = typer.prompt("What's the name of this entry?")
+    if vault.get(secrets_type, name) is not None:
+        print(
+            f"A vault entry with name {name} already exists. Please choose a new name or update the entry already there"
+        )
+        raise typer.Abort()
     fields = dict.fromkeys(secrets_name.model_fields.keys())
     if "password" in fields:
         password1 = typer.prompt("Enter the password", hide_input=True)
