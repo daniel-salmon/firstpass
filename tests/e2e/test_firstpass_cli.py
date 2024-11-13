@@ -3,12 +3,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from pydantic import SecretStr
 from typer.testing import CliRunner
 
 from firstpass import __version__
 from firstpass.cli import app
 from firstpass.lib.config import Config
-from firstpass.lib.secrets import SecretsType, get_name_from_secrets_type
+from firstpass.lib.secrets import Password, SecretsType, get_name_from_secrets_type
 from firstpass.lib.vault import LocalVault
 
 
@@ -46,11 +47,53 @@ def vault_config_test(tmp_path: Path) -> ConfigTest:
 
 
 @pytest.fixture(scope="function")
-def existing_vault_config_test(tmp_path: Path) -> ConfigTest:
+def existing_empty_vault_config_test(tmp_path: Path) -> ConfigTest:
     config_path = tmp_path / "config.yaml"
     vault_file = tmp_path / "vault"
     password = "password"
     LocalVault(password=password, file=vault_file)
+    config = Config(vault_file=vault_file)
+    config.to_yaml(config_path)
+    config_test = ConfigTest(config=config, config_path=config_path, password=password)
+    return config_test
+
+
+@pytest.fixture(scope="function")
+def existing_non_empty_vault_config_test(tmp_path: Path) -> ConfigTest:
+    config_path = tmp_path / "config.yaml"
+    vault_file = tmp_path / "vault"
+    password = "password"
+    vault = LocalVault(password=password, file=vault_file)
+    vault.set(
+        secrets_type=SecretsType.passwords,
+        name="pizza",
+        secret=Password(
+            label="Pizza",
+            notes="is great",
+            username="pepperoni",
+            password=SecretStr("cheese"),
+        ),
+    )
+    vault.set(
+        secrets_type=SecretsType.passwords,
+        name="pickles",
+        secret=Password(
+            label="Pickles",
+            notes="are gross on pizza",
+            username="cucumber",
+            password=SecretStr("dill"),
+        ),
+    )
+    vault.set(
+        secrets_type=SecretsType.passwords,
+        name="tickles",
+        secret=Password(
+            label="Tickles",
+            notes="would be weird with pickles",
+            username="fickles",
+            password=SecretStr("onmytickles"),
+        ),
+    )
     config = Config(vault_file=vault_file)
     config.to_yaml(config_path)
     config_test = ConfigTest(config=config, config_path=config_path, password=password)
@@ -218,7 +261,7 @@ def test_vault_list_parts(secrets_type: SecretsType, default_config_test: Config
     [
         ("vault_config_test", "password\ndifferentpassword", "password", 1),
         ("vault_config_test", "password\npassword", "password", 0),
-        ("existing_vault_config_test", "password\npassword", "password", 1),
+        ("existing_empty_vault_config_test", "password\npassword", "password", 1),
     ],
 )
 def test_vault_init(
@@ -239,24 +282,58 @@ def test_vault_init(
 
 
 @pytest.mark.parametrize(
-    "command_input, want_exit_code",
+    "config_test_str, command_input, want_exit_code",
     [
-        ("n\n", 1),
-        ("y\n", 0),
+        ("existing_empty_vault_config_test", "n\n", 1),
+        ("existing_empty_vault_config_test", "y\n", 0),
+        ("existing_non_empty_vault_config_test", "n\n", 1),
+        ("existing_non_empty_vault_config_test", "y\n", 0),
     ],
 )
 def test_vault_remove(
-    command_input: str, want_exit_code: int, existing_vault_config_test: ConfigTest
+    config_test_str: str,
+    command_input: str,
+    want_exit_code: int,
+    request: pytest.FixtureRequest,
 ):
-    assert existing_vault_config_test.config is not None
-    passworded_command_input = "\n".join(
-        (existing_vault_config_test.password, command_input)
-    )
+    config_test = request.getfixturevalue(config_test_str)
+    passworded_command_input = "\n".join((config_test.password, command_input))
+    command = shlex.split(f"vault --config-path {config_test.config_path} remove")
+    result = runner.invoke(app, command, input=passworded_command_input)
+    assert result.exit_code == want_exit_code
+    if want_exit_code != 0:
+        return
+    assert not config_test.config.vault_file.exists()
+
+
+@pytest.mark.parametrize(
+    "config_test_str, secrets_type, want_exit_code",
+    [
+        ("existing_empty_vault_config_test", SecretsType.passwords, 0),
+        ("existing_non_empty_vault_config_test", SecretsType.passwords, 0),
+    ],
+)
+def test_vault_list_names(
+    config_test_str: str,
+    secrets_type: SecretsType,
+    want_exit_code: int,
+    request: pytest.FixtureRequest,
+):
+    config_test = request.getfixturevalue(config_test_str)
+    passworded_command_input = f"{config_test.password}\n"
     command = shlex.split(
-        f"vault --config-path {existing_vault_config_test.config_path} remove"
+        f"vault --config-path {config_test.config_path} list-names {secrets_type}"
     )
     result = runner.invoke(app, command, input=passworded_command_input)
     assert result.exit_code == want_exit_code
     if want_exit_code != 0:
         return
-    assert not existing_vault_config_test.config.vault_file.exists()
+    vault = LocalVault(
+        password=config_test.password, file=config_test.config.vault_file
+    )
+    want_names = vault.list_names(secrets_type)
+    output = result.stdout.strip().split("\n")
+    # Remove the "Password:" prompt from stdout (that should be the first thing printed to the screen for this command)
+    output.pop(0)
+    assert len(output) == len(want_names)
+    assert set(output) == want_names
