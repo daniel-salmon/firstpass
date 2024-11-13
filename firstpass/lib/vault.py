@@ -93,7 +93,7 @@ class Vault(ABC):
         secrets = self.fetch_secrets()
         subsecrets = getattr(secrets, secrets_type)
         if subsecrets is None or name not in subsecrets:
-            return None
+            return
         del subsecrets[name]
         self.write_secrets(secrets)
 

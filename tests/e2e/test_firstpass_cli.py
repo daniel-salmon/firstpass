@@ -337,3 +337,45 @@ def test_vault_list_names(
     output.pop(0)
     assert len(output) == len(want_names)
     assert set(output) == want_names
+
+
+@pytest.mark.parametrize(
+    "config_test_str, secrets_type, name, want_exit_code",
+    [
+        (
+            "existing_empty_vault_config_test",
+            SecretsType.passwords,
+            "name_that_doesnt_exist",
+            0,
+        ),
+        ("existing_non_empty_vault_config_test", SecretsType.passwords, "pizza", 0),
+        ("existing_non_empty_vault_config_test", SecretsType.passwords, "pickles", 0),
+        ("existing_non_empty_vault_config_test", SecretsType.passwords, "tickles", 0),
+        (
+            "existing_non_empty_vault_config_test",
+            SecretsType.passwords,
+            "name_that_doesnt_exist",
+            0,
+        ),
+    ],
+)
+def test_vault_delete(
+    config_test_str: str,
+    secrets_type: SecretsType,
+    name: str,
+    want_exit_code: int,
+    request: pytest.FixtureRequest,
+):
+    config_test = request.getfixturevalue(config_test_str)
+    passworded_command_input = f"{config_test.password}\n"
+    command = shlex.split(
+        f"vault --config-path {config_test.config_path} delete {secrets_type} {name}"
+    )
+    result = runner.invoke(app, command, input=passworded_command_input)
+    assert result.exit_code == want_exit_code
+    if want_exit_code != 0:
+        return
+    vault = LocalVault(
+        password=config_test.password, file=config_test.config.vault_file
+    )
+    assert vault.get(secrets_type, name) is None
