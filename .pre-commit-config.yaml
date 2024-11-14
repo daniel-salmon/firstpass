@@ -3,8 +3,11 @@ repos:
   rev: v5.0.0
   hooks:
     - id: trailing-whitespace
+      exclude: client
     - id: end-of-file-fixer
+      exclude: client
     - id: check-yaml
+      exclude: client
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: v0.7.0
