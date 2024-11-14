@@ -114,8 +114,7 @@ engine: Engine
 async def lifespan(app: FastAPI):
     global engine
     settings = _get_settings()
-    connect_args = {"check_same_thread": False}
-    engine = create_engine(settings.db_url, echo=True, connect_args=connect_args)
+    engine = create_engine(settings.db_url, echo=True)
     _create_db_and_tables(engine)
     yield
     engine.dispose()
