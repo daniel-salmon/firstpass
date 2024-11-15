@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: timedelta
     pwd_hash_scheme: str
     db_url: str
+    debug: bool
 
 
 @lru_cache
@@ -114,7 +115,7 @@ engine: Engine
 async def lifespan(app: FastAPI):
     global engine
     settings = _get_settings()
-    engine = create_engine(settings.db_url, echo=True)
+    engine = create_engine(settings.db_url, echo=settings.debug)
     _create_db_and_tables(engine)
     yield
     engine.dispose()
