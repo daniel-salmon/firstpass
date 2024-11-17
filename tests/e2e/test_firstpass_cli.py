@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from click.testing import Result
 from pydantic import SecretStr
 from typer.testing import CliRunner
 
@@ -131,10 +132,18 @@ def invalid_schema_config_test(tmp_path: Path) -> ConfigTest:
     return config_test
 
 
+def run_cli(
+    *, command_str: str, command_input: str | None, want_exit_code: int
+) -> Result:
+    command = shlex.split(command_str)
+    result = runner.invoke(app, command, input=command_input)
+    assert result.exit_code == want_exit_code
+    return result
+
+
 def test_version():
-    command = shlex.split("version")
-    result = runner.invoke(app, command)
-    assert result.exit_code == 0
+    command_str = "version"
+    result = run_cli(command_str=command_str, command_input=None, want_exit_code=0)
     output = result.stdout.strip()
     assert output == __version__
 
@@ -157,9 +166,12 @@ def test_init_config(
     request: pytest.FixtureRequest,
 ):
     config_test = request.getfixturevalue(config_test_str)
-    command = shlex.split(f"init config --config-path {config_test.config_path}")
-    result = runner.invoke(app, command, input=command_input)
-    assert result.exit_code == want_exit_code
+    command_str = f"init config --config-path {config_test.config_path}"
+    _ = run_cli(
+        command_str=command_str,
+        command_input=command_input,
+        want_exit_code=want_exit_code,
+    )
     if want_exit_code != 0:
         return
     new_config = Config.from_yaml(config_test.config_path)
@@ -177,9 +189,10 @@ def test_config_list_keys(
     config_test_str: str, want_exit_code: int, request: pytest.FixtureRequest
 ):
     config_test = request.getfixturevalue(config_test_str)
-    command = shlex.split(f"config --config-path {config_test.config_path} list-keys")
-    result = runner.invoke(app, command)
-    assert result.exit_code == want_exit_code
+    command_str = f"config --config-path {config_test.config_path} list-keys"
+    result = run_cli(
+        command_str=command_str, command_input=None, want_exit_code=want_exit_code
+    )
     if want_exit_code != 0:
         return
     output = result.stdout.strip()
@@ -202,9 +215,10 @@ def test_config_get(
     config_test_str: str, key: str, want_exit_code: int, request: pytest.FixtureRequest
 ):
     config_test = request.getfixturevalue(config_test_str)
-    command = shlex.split(f"config --config-path {config_test.config_path} get {key}")
-    result = runner.invoke(app, command)
-    assert result.exit_code == want_exit_code
+    command_str = f"config --config-path {config_test.config_path} get {key}"
+    result = run_cli(
+        command_str=command_str, command_input=None, want_exit_code=want_exit_code
+    )
     if want_exit_code != 0:
         return
     output = result.stdout.strip()
@@ -233,11 +247,10 @@ def test_config_set(
     request: pytest.FixtureRequest,
 ):
     config_test = request.getfixturevalue(config_test_str)
-    command = shlex.split(
-        f"config --config-path {config_test.config_path} set {key} {value}"
+    command_str = f"config --config-path {config_test.config_path} set {key} {value}"
+    _ = run_cli(
+        command_str=command_str, command_input=None, want_exit_code=want_exit_code
     )
-    result = runner.invoke(app, command)
-    assert result.exit_code == want_exit_code
     if want_exit_code != 0:
         return
     if Config.model_fields[key].annotation is bool:
@@ -253,11 +266,8 @@ def test_config_set(
 def test_vault_list_parts(secrets_type: SecretsType, default_config_test: ConfigTest):
     secret_name = get_name_from_secrets_type(secrets_type)
     want_keys = secret_name.list_parts()
-    command = shlex.split(
-        f"vault --config-path {default_config_test.config_path} list-parts {secrets_type}"
-    )
-    result = runner.invoke(app, command)
-    assert result.exit_code == 0
+    command_str = f"vault --config-path {default_config_test.config_path} list-parts {secrets_type}"
+    result = run_cli(command_str=command_str, command_input=None, want_exit_code=0)
     got_keys = result.stdout.strip().split("\n")
     assert len(got_keys) == len(want_keys)
     assert set(got_keys) == want_keys
@@ -279,9 +289,12 @@ def test_vault_init(
     request: pytest.FixtureRequest,
 ):
     config_test = request.getfixturevalue(config_test_str)
-    command = shlex.split(f"vault --config-path {config_test.config_path} init")
-    result = runner.invoke(app, command, input=command_input)
-    assert result.exit_code == want_exit_code
+    command_str = f"vault --config-path {config_test.config_path} init"
+    _ = run_cli(
+        command_str=command_str,
+        command_input=command_input,
+        want_exit_code=want_exit_code,
+    )
     if want_exit_code != 0:
         return
     vault = LocalVault(password=password, file=config_test.config.vault_file)
@@ -305,9 +318,12 @@ def test_vault_remove(
 ):
     config_test = request.getfixturevalue(config_test_str)
     passworded_command_input = "\n".join((config_test.password, command_input))
-    command = shlex.split(f"vault --config-path {config_test.config_path} remove")
-    result = runner.invoke(app, command, input=passworded_command_input)
-    assert result.exit_code == want_exit_code
+    command_str = f"vault --config-path {config_test.config_path} remove"
+    _ = run_cli(
+        command_str=command_str,
+        command_input=passworded_command_input,
+        want_exit_code=want_exit_code,
+    )
     if want_exit_code != 0:
         return
     assert not config_test.config.vault_file.exists()
@@ -328,11 +344,14 @@ def test_vault_list_names(
 ):
     config_test = request.getfixturevalue(config_test_str)
     passworded_command_input = f"{config_test.password}\n"
-    command = shlex.split(
+    command_str = (
         f"vault --config-path {config_test.config_path} list-names {secrets_type}"
     )
-    result = runner.invoke(app, command, input=passworded_command_input)
-    assert result.exit_code == want_exit_code
+    result = run_cli(
+        command_str=command_str,
+        command_input=passworded_command_input,
+        want_exit_code=want_exit_code,
+    )
     if want_exit_code != 0:
         return
     vault = LocalVault(
@@ -340,7 +359,7 @@ def test_vault_list_names(
     )
     want_names = vault.list_names(secrets_type)
     output = result.stdout.strip().split("\n")
-    # Remove the "Password:" prompt from stdout (that should be the first thing printed to the screen for this command)
+    # Remove the Password: prompt
     output.pop(0)
     assert len(output) == len(want_names)
     assert set(output) == want_names
@@ -414,11 +433,12 @@ def test_vault_new(
 ):
     config_test = request.getfixturevalue(config_test_str)
     passworded_command_input = "\n".join((config_test.password, command_input))
-    command = shlex.split(
-        f"vault --config-path {config_test.config_path} new {secrets_type}"
+    command_str = f"vault --config-path {config_test.config_path} new {secrets_type}"
+    _ = run_cli(
+        command_str=command_str,
+        command_input=passworded_command_input,
+        want_exit_code=want_exit_code,
     )
-    result = runner.invoke(app, command, input=passworded_command_input)
-    assert result.exit_code == want_exit_code
     if want_exit_code != 0:
         return
     vault = LocalVault(
@@ -636,11 +656,12 @@ def test_vault_get(
 ):
     config_test = request.getfixturevalue(config_test_str)
     passworded_command_input = f"{config_test.password}\n"
-    command = shlex.split(
-        f"vault --config-path {config_test.config_path} get {secrets_type} {name} {secret_part} {'--show' if show else ''} {'--copy' if copy else ''}"
+    command_str = f"vault --config-path {config_test.config_path} get {secrets_type} {name} {secret_part} {'--show' if show else ''} {'--copy' if copy else ''}"
+    result = run_cli(
+        command_str=command_str,
+        command_input=passworded_command_input,
+        want_exit_code=want_exit_code,
     )
-    result = runner.invoke(app, command, input=passworded_command_input)
-    assert result.exit_code == want_exit_code
     if want_exit_code != 0:
         return
     vault = LocalVault(
@@ -738,11 +759,12 @@ def test_vault_set(
 ):
     config_test = request.getfixturevalue(config_test_str)
     passworded_command_input = f"{config_test.password}\n"
-    command = shlex.split(
-        f"vault --config-path {config_test.config_path} set {secrets_type} {name} {secret_part} '{value}'"
+    command_str = f"vault --config-path {config_test.config_path} set {secrets_type} {name} {secret_part} '{value}'"
+    _ = run_cli(
+        command_str=command_str,
+        command_input=passworded_command_input,
+        want_exit_code=want_exit_code,
     )
-    result = runner.invoke(app, command, input=passworded_command_input)
-    assert result.exit_code == want_exit_code
     if want_exit_code != 0:
         return
     vault = LocalVault(
@@ -785,11 +807,14 @@ def test_vault_delete(
 ):
     config_test = request.getfixturevalue(config_test_str)
     passworded_command_input = f"{config_test.password}\n"
-    command = shlex.split(
+    command_str = (
         f"vault --config-path {config_test.config_path} delete {secrets_type} {name}"
     )
-    result = runner.invoke(app, command, input=passworded_command_input)
-    assert result.exit_code == want_exit_code
+    _ = run_cli(
+        command_str=command_str,
+        command_input=passworded_command_input,
+        want_exit_code=want_exit_code,
+    )
     if want_exit_code != 0:
         return
     vault = LocalVault(
