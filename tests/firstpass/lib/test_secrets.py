@@ -1,20 +1,24 @@
 import pytest
 
-from firstpass.secrets import Password, Secrets
+from pydantic import SecretStr
+
+from firstpass.lib.secrets import Password, Secrets
 
 
 @pytest.mark.parametrize(
     "secrets",
     [
         Secrets(
-            passwords={"password1": Password(username="fish", password="password")}
+            passwords={
+                "password1": Password(username="fish", password=SecretStr("password"))
+            }
         ),
         Secrets(
             passwords={
-                "password1": Password(username="fish", password="password"),
+                "password1": Password(username="fish", password=SecretStr("password")),
                 "password2": Password(
                     username="sticks",
-                    password="password",
+                    password=SecretStr("password"),
                     label="https://pybit.es",
                     notes="lorem ipsum",
                 ),

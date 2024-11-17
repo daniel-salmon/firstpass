@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 from pathlib import Path
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
@@ -61,6 +61,20 @@ class Vault(ABC):
         ciphertext = self.cipher.encrypt(plaintext)
         return self.salt + ciphertext
 
+    def can_open(self) -> bool:
+        try:
+            _ = self.fetch_secrets()
+        except InvalidToken:
+            return False
+        return True
+
+    def list_names(self, secrets_type: SecretsType) -> set[str]:
+        secrets = self.fetch_secrets()
+        subsecrets = getattr(secrets, secrets_type)
+        if subsecrets is None:
+            return set()
+        return set(subsecrets.keys())
+
     def get(self, secrets_type: SecretsType, name: str) -> Secret | None:
         secrets = self.fetch_secrets()
         subsecrets = getattr(secrets, secrets_type)
@@ -79,7 +93,7 @@ class Vault(ABC):
         secrets = self.fetch_secrets()
         subsecrets = getattr(secrets, secrets_type)
         if subsecrets is None or name not in subsecrets:
-            return None
+            return
         del subsecrets[name]
         self.write_secrets(secrets)
 
