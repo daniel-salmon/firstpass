@@ -139,6 +139,27 @@ def test_set_get_delete(
 
 
 @pytest.mark.parametrize(
+    "password, want",
+    [
+        (
+            "password",
+            "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
+        ),
+        (
+            "notherpassword",
+            "ac1a3146485f6ecec0bdec2514140c8763a9beffb2a14d47a931e9962c7d464c",
+        ),
+        (
+            "pickled pizza piper",
+            "18e33af62a6edf76fca092a0e7939d2fa9938d3d4008a6ab653941c48522174e",
+        ),
+    ],
+)
+def test_hash_password(password: str, want: str) -> None:
+    assert Vault.hash_password(password) == want
+
+
+@pytest.mark.parametrize(
     "secrets_type, name, secret",
     [
         (

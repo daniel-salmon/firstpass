@@ -100,6 +100,13 @@ class Vault(ABC):
         del subsecrets[name]
         self.write_secrets(secrets)
 
+    @staticmethod
+    def hash_password(password: str) -> str:
+        digest = hashes.Hash(hashes.SHA256())
+        digest.update(password.encode("utf-8"))
+        hashed_password_bytes = digest.finalize()
+        return hashed_password_bytes.hex()
+
     @abstractmethod
     def fetch_secrets(self) -> Secrets:
         pass
@@ -154,12 +161,13 @@ class CloudVault(Vault):
         self.blob_id = self._get_blob_id()
 
     def _get_token(self) -> str:
+        # Hash the password so that the plaintext password never leaves the client
+        hashed_password = Vault.hash_password(self.password)
         with firstpass_client.ApiClient(self.configuration) as api_client:
             api_instance = firstpass_client.DefaultApi(api_client)
-            # TODO: We should hash the password so that the password remains zero-knowledge
             try:
                 token = api_instance.token_token_post(
-                    username=self.username, password=self.password
+                    username=self.username, password=hashed_password
                 )
             except firstpass_client.exceptions.UnauthorizedException:
                 # TODO: Make custom exceptions for the vault?
