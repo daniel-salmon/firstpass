@@ -208,7 +208,7 @@ dev = [
 [[package]]
 name = "firstpass-client"
 version = "0.1.0"
-source = { git = "https://github.com/daniel-salmon/firstpass-client?branch=main#c416a93724c933e20a94404d7e8b6040bc834494" }
+source = { git = "https://github.com/daniel-salmon/firstpass-client?branch=main#d0b148af09ea7ae5f9b797ce26ed805ad6f2eb90" }
 dependencies = [
     { name = "pydantic" },
     { name = "python-dateutil" },

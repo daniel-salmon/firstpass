@@ -9,6 +9,7 @@ from pydantic import BaseModel
 class Config(BaseModel):
     local: bool = False
     vault_file: Path = Path.home() / Path(".firstpass/vault")
+    cloud_host: str = "http://localhost:8000"
 
     @classmethod
     def from_yaml(cls, path: Path) -> Self:

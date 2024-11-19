@@ -4,6 +4,9 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 from pathlib import Path
 
+import firstpass_client
+from firstpass_client.models import Blob
+from firstpass_client.rest import ApiException
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -139,3 +142,67 @@ class LocalVault(Vault):
     def write_secrets(self, secrets: Secrets) -> None:
         with open(self.file, "wb") as f:
             f.write(self.encrypt(secrets.serialize()))
+
+
+class CloudVault(Vault):
+    def __init__(self, username: str, password: str, host: str) -> None:
+        super().__init__(password)
+        self.username = username
+        self.host = host
+        self.configuration = firstpass_client.Configuration(host=host)
+        self.configuration.access_token = self._get_token()
+        self.blob_id = self._get_blob_id()
+
+    def _get_token(self) -> str:
+        with firstpass_client.ApiClient(self.configuration) as api_client:
+            api_instance = firstpass_client.DefaultApi(api_client)
+            # TODO: We should hash the password so that the password remains zero-knowledge
+            try:
+                token = api_instance.token_token_post(
+                    username=self.username, password=self.password
+                )
+            except firstpass_client.exceptions.UnauthorizedException:
+                # TODO: Make custom exceptions for the vault?
+                # Either the user entered the wrong password or the user doesn't exist
+                # and needs created
+                raise
+            except ApiException:
+                # TODO: Make custom exceptions for the vault?
+                raise
+        return token.access_token
+
+    def _get_blob_id(self) -> str:
+        with firstpass_client.ApiClient(self.configuration) as api_client:
+            api_instance = firstpass_client.DefaultApi(api_client)
+            try:
+                user_get = api_instance.get_user_user_get()
+            except ApiException:
+                # TODO: Make custom exceptions for the vault?
+                raise
+        return user_get.blob_id
+
+    def fetch_secrets(self) -> Secrets:
+        with firstpass_client.ApiClient(self.configuration) as api_client:
+            api_instance = firstpass_client.DefaultApi(api_client)
+            try:
+                blob = api_instance.get_blob_blob_blob_id_get(self.blob_id)
+            except ApiException:
+                # TODO: Make custom exceptions for the vault?
+                raise
+        blob_bytes = base64.b64decode(blob.blob)
+        return Secrets.deserialize(self.decrypt(blob_bytes))
+
+    def write_secrets(self, secrets: Secrets) -> None:
+        with firstpass_client.ApiClient(self.configuration) as api_client:
+            api_instance = firstpass_client.DefaultApi(api_client)
+            try:
+                blob_str = base64.b64encode(self.encrypt(secrets.serialize())).decode(
+                    "utf-8"
+                )
+                blob = Blob(blob_id=self.blob_id, blob=blob_str)
+                _ = api_instance.put_blob_blob_blob_id_put(
+                    blob_id=self.blob_id, blob=blob
+                )
+            except ApiException:
+                # TODO: Make custom exceptions for the vault?
+                raise
