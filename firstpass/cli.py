@@ -7,6 +7,7 @@ from pydantic import SecretStr, ValidationError
 
 from firstpass import __version__, name as app_name
 from firstpass.lib.config import Config, update_config
+from firstpass.lib.exceptions import ConfigKeyDoesNotExistError, ConfigValidationError
 from firstpass.lib.secrets import SecretPart, SecretsType, get_name_from_secrets_type
 from firstpass.lib.vault import LocalVault, Vault
 
@@ -128,10 +129,10 @@ def config_set(key: str, value: str):
         raise AssertionError("config_path is None")
     try:
         updated_config = update_config(config, key, value)
-    except AttributeError:
+    except ConfigKeyDoesNotExistError:
         print(f"{key} is not a config setting")
         raise typer.Exit(1)
-    except ValidationError:
+    except ConfigValidationError:
         print(
             f"Provided value does not match schema. {key} requires type compatible with {Config.model_fields[key].annotation}"
         )
