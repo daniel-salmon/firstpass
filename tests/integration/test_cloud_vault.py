@@ -3,6 +3,7 @@ import pytest
 import firstpass_client
 from pydantic import BaseModel, SecretStr
 
+from firstpass.lib.exceptions import VaultInvalidUsernameOrPasswordError
 from firstpass.lib.secrets import Password, Secret, Secrets, SecretsType
 from firstpass.lib.vault import CloudVault, Vault
 
@@ -90,3 +91,24 @@ def test_cloud_vault(
     assert vault.get(secrets_type, name) == secret
     vault.delete(secrets_type, name)
     assert vault.get(secrets_type, name) is None
+
+
+@pytest.mark.parametrize(
+    "user_str",
+    ["user1", "user2"],
+)
+def test_cloud_vault_wrong_password(user_str: str, request: pytest.FixtureRequest):
+    user = request.getfixturevalue(user_str)
+    with pytest.raises(VaultInvalidUsernameOrPasswordError):
+        _ = CloudVault(
+            username=user.username, password=user.password + "extra", host=user.host
+        )
+
+
+@pytest.mark.parametrize(
+    "username",
+    ["353897d1-e0d8-4fd6-a787-82f403d2cdf7", "92c733d5-f908-476b-8e25-9978cdb53595"],
+)
+def test_cloud_vault_invalid_username(username: str):
+    with pytest.raises(VaultInvalidUsernameOrPasswordError):
+        _ = CloudVault(username=username, password="password", host=HOST)
