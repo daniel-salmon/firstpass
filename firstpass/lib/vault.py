@@ -5,8 +5,8 @@ from functools import cached_property
 from pathlib import Path
 
 import firstpass_client
-from firstpass_client.models import Blob
-from firstpass_client.rest import ApiException
+from firstpass_client import ApiException, Blob
+from firstpass_client.exceptions import UnauthorizedException
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -178,7 +178,7 @@ class CloudVault(Vault):
                 token = api_instance.token_token_post(
                     username=self.username, password=hashed_password
                 )
-            except firstpass_client.exceptions.UnauthorizedException:
+            except UnauthorizedException:
                 raise VaultInvalidUsernameOrPasswordError
             except ApiException:
                 raise VaultUnavailableError
