@@ -4,11 +4,19 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 from pathlib import Path
 
+import firstpass_client
+from firstpass_client import ApiException, Blob
+from firstpass_client.exceptions import UnauthorizedException
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from .secrets import Secret, Secrets, SecretsType
+from .exceptions import (
+    VaultInvalidUsernameOrPasswordError,
+    VaultUnavailableError,
+    VaultUndecryptableError,
+)
 
 SALT_SIZE_BYTES = 16
 PBKDF2_ITERATIONS = 600_000
@@ -55,7 +63,11 @@ class Vault(ABC):
         salt, ciphertext = blob[:SALT_SIZE_BYTES], blob[SALT_SIZE_BYTES:]
         if self.salt is None:
             self.salt = salt
-        return self.cipher.decrypt(ciphertext)
+        try:
+            plaintext = self.cipher.decrypt(ciphertext)
+        except InvalidToken:
+            raise VaultUndecryptableError
+        return plaintext
 
     def encrypt(self, plaintext: bytes) -> bytes:
         ciphertext = self.cipher.encrypt(plaintext)
@@ -64,7 +76,7 @@ class Vault(ABC):
     def can_open(self) -> bool:
         try:
             _ = self.fetch_secrets()
-        except InvalidToken:
+        except VaultUndecryptableError:
             return False
         return True
 
@@ -96,6 +108,13 @@ class Vault(ABC):
             return
         del subsecrets[name]
         self.write_secrets(secrets)
+
+    @staticmethod
+    def hash_password(password: str) -> str:
+        digest = hashes.Hash(hashes.SHA256())
+        digest.update(password.encode("utf-8"))
+        hashed_password_bytes = digest.finalize()
+        return hashed_password_bytes.hex()
 
     @abstractmethod
     def fetch_secrets(self) -> Secrets:
@@ -139,3 +158,61 @@ class LocalVault(Vault):
     def write_secrets(self, secrets: Secrets) -> None:
         with open(self.file, "wb") as f:
             f.write(self.encrypt(secrets.serialize()))
+
+
+class CloudVault(Vault):
+    def __init__(self, username: str, password: str, host: str) -> None:
+        super().__init__(password)
+        self.username = username
+        self.host = host
+        self.configuration = firstpass_client.Configuration(host=host)
+        self.configuration.access_token = self._get_token()
+        self.blob_id = self._get_blob_id()
+
+    def _get_token(self) -> str:
+        # Hash the password so that the plaintext password never leaves the client
+        hashed_password = Vault.hash_password(self.password)
+        with firstpass_client.ApiClient(self.configuration) as api_client:
+            api_instance = firstpass_client.DefaultApi(api_client)
+            try:
+                token = api_instance.token_token_post(
+                    username=self.username, password=hashed_password
+                )
+            except UnauthorizedException:
+                raise VaultInvalidUsernameOrPasswordError
+            except ApiException:
+                raise VaultUnavailableError
+        return token.access_token
+
+    def _get_blob_id(self) -> str:
+        with firstpass_client.ApiClient(self.configuration) as api_client:
+            api_instance = firstpass_client.DefaultApi(api_client)
+            try:
+                user_get = api_instance.get_user_user_get()
+            except ApiException:
+                raise VaultUnavailableError
+        return user_get.blob_id
+
+    def fetch_secrets(self) -> Secrets:
+        with firstpass_client.ApiClient(self.configuration) as api_client:
+            api_instance = firstpass_client.DefaultApi(api_client)
+            try:
+                blob = api_instance.get_blob_blob_blob_id_get(blob_id=self.blob_id)
+            except ApiException:
+                raise VaultUnavailableError
+        blob_bytes = base64.b64decode(blob.blob)
+        return Secrets.deserialize(self.decrypt(blob_bytes))
+
+    def write_secrets(self, secrets: Secrets) -> None:
+        with firstpass_client.ApiClient(self.configuration) as api_client:
+            api_instance = firstpass_client.DefaultApi(api_client)
+            try:
+                blob_str = base64.b64encode(self.encrypt(secrets.serialize())).decode(
+                    "utf-8"
+                )
+                blob = Blob(blob_id=self.blob_id, blob=blob_str)
+                _ = api_instance.put_blob_blob_blob_id_put(
+                    blob_id=self.blob_id, blob=blob
+                )
+            except ApiException:
+                raise VaultUnavailableError

@@ -3,11 +3,15 @@ from pathlib import Path
 from typing import Self
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+
+from firstpass.lib.exceptions import ConfigKeyDoesNotExistError, ConfigValidationError
 
 
 class Config(BaseModel):
+    cloud_host: str = "http://localhost:8000"
     local: bool = False
+    username: str = "username"
     vault_file: Path = Path.home() / Path(".firstpass/vault")
 
     @classmethod
@@ -28,8 +32,11 @@ class Config(BaseModel):
 
 def update_config(config: Config, key: str, value: str) -> Config:
     if not hasattr(config, key):
-        raise AttributeError
+        raise ConfigKeyDoesNotExistError
     config_dict = config.model_dump()
     config_dict[key] = value
-    config = Config(**config_dict)
+    try:
+        config = Config(**config_dict)
+    except ValidationError:
+        raise ConfigValidationError
     return config
