@@ -12,6 +12,11 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from .secrets import Secret, Secrets, SecretsType
+from .exceptions import (
+    VaultInvalidUsernameOrPasswordError,
+    VaultUnavailableError,
+    VaultUndecryptableError,
+)
 
 SALT_SIZE_BYTES = 16
 PBKDF2_ITERATIONS = 600_000
@@ -58,7 +63,11 @@ class Vault(ABC):
         salt, ciphertext = blob[:SALT_SIZE_BYTES], blob[SALT_SIZE_BYTES:]
         if self.salt is None:
             self.salt = salt
-        return self.cipher.decrypt(ciphertext)
+        try:
+            plaintext = self.cipher.decrypt(ciphertext)
+        except InvalidToken:
+            raise VaultUndecryptableError
+        return plaintext
 
     def encrypt(self, plaintext: bytes) -> bytes:
         ciphertext = self.cipher.encrypt(plaintext)
@@ -67,7 +76,7 @@ class Vault(ABC):
     def can_open(self) -> bool:
         try:
             _ = self.fetch_secrets()
-        except InvalidToken:
+        except VaultUndecryptableError:
             return False
         return True
 
@@ -170,13 +179,9 @@ class CloudVault(Vault):
                     username=self.username, password=hashed_password
                 )
             except firstpass_client.exceptions.UnauthorizedException:
-                # TODO: Make custom exceptions for the vault?
-                # Either the user entered the wrong password or the user doesn't exist
-                # and needs created
-                raise
+                raise VaultInvalidUsernameOrPasswordError
             except ApiException:
-                # TODO: Make custom exceptions for the vault?
-                raise
+                raise VaultUnavailableError
         return token.access_token
 
     def _get_blob_id(self) -> str:
@@ -185,8 +190,7 @@ class CloudVault(Vault):
             try:
                 user_get = api_instance.get_user_user_get()
             except ApiException:
-                # TODO: Make custom exceptions for the vault?
-                raise
+                raise VaultUnavailableError
         return user_get.blob_id
 
     def fetch_secrets(self) -> Secrets:
@@ -195,8 +199,7 @@ class CloudVault(Vault):
             try:
                 blob = api_instance.get_blob_blob_blob_id_get(self.blob_id)
             except ApiException:
-                # TODO: Make custom exceptions for the vault?
-                raise
+                raise VaultUnavailableError
         blob_bytes = base64.b64decode(blob.blob)
         return Secrets.deserialize(self.decrypt(blob_bytes))
 
@@ -212,5 +215,4 @@ class CloudVault(Vault):
                     blob_id=self.blob_id, blob=blob
                 )
             except ApiException:
-                # TODO: Make custom exceptions for the vault?
-                raise
+                raise VaultUnavailableError
