@@ -197,7 +197,7 @@ class CloudVault(Vault):
         with firstpass_client.ApiClient(self.configuration) as api_client:
             api_instance = firstpass_client.DefaultApi(api_client)
             try:
-                blob = api_instance.get_blob_blob_blob_id_get(self.blob_id)
+                blob = api_instance.get_blob_blob_blob_id_get(blob_id=self.blob_id)
             except ApiException:
                 raise VaultUnavailableError
         blob_bytes = base64.b64decode(blob.blob)
