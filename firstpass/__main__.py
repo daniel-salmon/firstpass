@@ -1,3 +1,3 @@
-from firstpass.cli import app
+from .cli import app
 
 app()

@@ -5,11 +5,11 @@ import pyperclip
 import typer
 from pydantic import SecretStr, ValidationError
 
-from firstpass import __version__, name as app_name
-from firstpass.lib.config import Config, update_config
-from firstpass.lib.exceptions import ConfigKeyDoesNotExistError, ConfigValidationError
-from firstpass.lib.secrets import SecretPart, SecretsType, get_name_from_secrets_type
-from firstpass.lib.vault import LocalVault, Vault
+from . import __version__, name as app_name
+from .lib.config import Config, update_config
+from .lib.exceptions import ConfigKeyDoesNotExistError, ConfigValidationError
+from .lib.secrets import SecretPart, SecretsType, get_name_from_secrets_type
+from .lib.vault import LocalVault, Vault
 
 State = TypedDict(
     "State",
