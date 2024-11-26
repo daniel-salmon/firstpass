@@ -5,7 +5,7 @@ from typing import Self
 import yaml
 from pydantic import BaseModel, ValidationError
 
-from firstpass.lib.exceptions import ConfigKeyDoesNotExistError, ConfigValidationError
+from .exceptions import ConfigKeyDoesNotExistError, ConfigValidationError
 
 
 class Config(BaseModel):
