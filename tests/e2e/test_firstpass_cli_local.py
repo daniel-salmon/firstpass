@@ -10,15 +10,15 @@ from typer.testing import CliRunner
 
 from firstpass import __version__
 from firstpass.cli import app
-from firstpass.lib.config import Config
-from firstpass.lib.secrets import (
+from firstpass.lib import (
+    Config,
+    LocalVault,
     Password,
     Secret,
     SecretPart,
     SecretsType,
     get_name_from_secrets_type,
 )
-from firstpass.lib.vault import LocalVault
 
 
 runner = CliRunner()

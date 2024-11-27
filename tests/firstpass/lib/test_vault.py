@@ -9,12 +9,18 @@ from firstpass_client import ApiException, Blob, Token, UserGet
 from firstpass_client.exceptions import UnauthorizedException
 from pydantic import SecretStr
 
-from firstpass.lib.exceptions import (
+from firstpass.lib import (
+    CloudVault,
+    LocalVault,
+    MemoryVault,
+    Password,
+    Secret,
+    Secrets,
+    SecretsType,
+    Vault,
     VaultInvalidUsernameOrPasswordError,
     VaultUnavailableError,
 )
-from firstpass.lib.vault import CloudVault, LocalVault, MemoryVault, Vault
-from firstpass.lib.secrets import Secret, Secrets, Password, SecretsType
 
 
 @dataclass

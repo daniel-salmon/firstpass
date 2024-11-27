@@ -7,15 +7,21 @@ import firstpass_client
 from pydantic import SecretStr, ValidationError
 
 from . import __version__, name as app_name
-from .lib.config import Config, update_config
-from .lib.exceptions import (
+from .lib import (
+    CloudVault,
+    Config,
     ConfigKeyDoesNotExistError,
     ConfigValidationError,
+    LocalVault,
+    SecretPart,
+    Secrets,
+    SecretsType,
+    Vault,
     VaultInvalidUsernameOrPasswordError,
     VaultUnavailableError,
+    get_name_from_secrets_type,
+    update_config,
 )
-from .lib.secrets import SecretPart, Secrets, SecretsType, get_name_from_secrets_type
-from .lib.vault import CloudVault, LocalVault, Vault
 
 State = TypedDict(
     "State",

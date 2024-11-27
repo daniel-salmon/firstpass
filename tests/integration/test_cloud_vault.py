@@ -3,9 +3,15 @@ import pytest
 import firstpass_client
 from pydantic import BaseModel, SecretStr
 
-from firstpass.lib.exceptions import VaultInvalidUsernameOrPasswordError
-from firstpass.lib.secrets import Password, Secret, Secrets, SecretsType
-from firstpass.lib.vault import CloudVault, Vault
+from firstpass.lib import (
+    CloudVault,
+    Password,
+    Secret,
+    Secrets,
+    SecretsType,
+    Vault,
+    VaultInvalidUsernameOrPasswordError,
+)
 
 
 HOST = "http://localhost:8000"
