@@ -9,7 +9,7 @@ from firstpass_client import ApiException, Blob, Token, UserGet
 from firstpass_client.exceptions import UnauthorizedException
 from pydantic import SecretStr
 
-from firstpass.lib import (
+from firstpass.utils import (
     CloudVault,
     LocalVault,
     MemoryVault,
@@ -208,7 +208,7 @@ def test_local_vault(
 def test_cloud_vault_init(
     username: str, password: str, host: str, token: Token, user_get: UserGet
 ) -> None:
-    with patch("firstpass.lib.vault.firstpass_client", autospec=True) as mock_client:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get
@@ -238,7 +238,7 @@ def test_cloud_vault_init(
 def test_cloud_vault_init_username_or_password_incorrect(
     username: str, password: str, host: str, token: Token, user_get: UserGet
 ) -> None:
-    with patch("firstpass.lib.vault.firstpass_client", autospec=True) as mock_client:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.side_effect = UnauthorizedException
         with pytest.raises(VaultInvalidUsernameOrPasswordError):
@@ -260,7 +260,7 @@ def test_cloud_vault_init_username_or_password_incorrect(
 def test_cloud_vault_init_generic_error(
     username: str, password: str, host: str, token: Token, user_get: UserGet
 ) -> None:
-    with patch("firstpass.lib.vault.firstpass_client", autospec=True) as mock_client:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.side_effect = ApiException
         with pytest.raises(VaultUnavailableError):
@@ -288,7 +288,7 @@ def test_cloud_vault_fetch_secrets(
     user_get: UserGet,
     secrets: Secrets,
 ) -> None:
-    with patch("firstpass.lib.vault.firstpass_client", autospec=True) as mock_client:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get
@@ -323,7 +323,7 @@ def test_cloud_vault_fetch_secrets_generic_error(
     token: Token,
     user_get: UserGet,
 ) -> None:
-    with patch("firstpass.lib.vault.firstpass_client", autospec=True) as mock_client:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get
@@ -354,7 +354,7 @@ def test_cloud_vault_write_secrets(
     user_get: UserGet,
     secrets: Secrets,
 ) -> None:
-    with patch("firstpass.lib.vault.firstpass_client", autospec=True) as mock_client:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get
@@ -384,7 +384,7 @@ def test_cloud_vault_write_secrets_generic_error(
     user_get: UserGet,
     secrets: Secrets,
 ) -> None:
-    with patch("firstpass.lib.vault.firstpass_client", autospec=True) as mock_client:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get

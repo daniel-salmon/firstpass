@@ -2,7 +2,7 @@ import pytest
 
 from pydantic import SecretStr
 
-from firstpass.lib import Password, Secrets
+from firstpass.utils import Password, Secrets
 
 
 @pytest.mark.parametrize(

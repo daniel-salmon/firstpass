@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 
 from firstpass import __version__
 from firstpass.cli import app
-from firstpass.lib import (
+from firstpass.utils import (
     Config,
     LocalVault,
     Password,

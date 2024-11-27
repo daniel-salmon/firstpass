@@ -3,7 +3,7 @@ import pytest
 import firstpass_client
 from pydantic import BaseModel, SecretStr
 
-from firstpass.lib import (
+from firstpass.utils import (
     CloudVault,
     Password,
     Secret,

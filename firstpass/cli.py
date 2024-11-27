@@ -7,7 +7,7 @@ import firstpass_client
 from pydantic import SecretStr, ValidationError
 
 from . import __version__, name as app_name
-from .lib import (
+from .utils import (
     CloudVault,
     Config,
     ConfigKeyDoesNotExistError,
