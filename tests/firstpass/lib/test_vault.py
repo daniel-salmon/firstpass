@@ -206,7 +206,7 @@ def test_cloud_vault_init(
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get
-        cloud_vault = CloudVault(username, password, host)
+        cloud_vault = CloudVault(username, password, host, None)
         assert cloud_vault.username == username
         assert cloud_vault.host == host
         assert cloud_vault.configuration.access_token == token.access_token
@@ -236,7 +236,7 @@ def test_cloud_vault_init_username_or_password_incorrect(
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.side_effect = UnauthorizedException
         with pytest.raises(VaultInvalidUsernameOrPasswordError):
-            _ = CloudVault(username, password, host)
+            _ = CloudVault(username, password, host, None)
 
 
 @pytest.mark.parametrize(
@@ -258,7 +258,7 @@ def test_cloud_vault_init_generic_error(
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.side_effect = ApiException
         with pytest.raises(VaultUnavailableError):
-            _ = CloudVault(username, password, host)
+            _ = CloudVault(username, password, host, None)
 
 
 @pytest.mark.parametrize(
@@ -286,7 +286,7 @@ def test_cloud_vault_fetch_secrets(
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get
-        cloud_vault = CloudVault(username, password, host)
+        cloud_vault = CloudVault(username, password, host, None)
         want_blob_blob = base64.b64encode(
             cloud_vault.encrypt(secrets.serialize())
         ).decode("utf-8")
@@ -321,7 +321,7 @@ def test_cloud_vault_fetch_secrets_generic_error(
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get
-        cloud_vault = CloudVault(username, password, host)
+        cloud_vault = CloudVault(username, password, host, None)
         mock_api_instance.get_blob_blob_blob_id_get.side_effect = ApiException
         with pytest.raises(VaultUnavailableError):
             _ = cloud_vault.fetch_secrets()
@@ -352,7 +352,7 @@ def test_cloud_vault_write_secrets(
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get
-        cloud_vault = CloudVault(username, password, host)
+        cloud_vault = CloudVault(username, password, host, None)
         cloud_vault.write_secrets(secrets)
         mock_api_instance.put_blob_blob_blob_id_put.assert_called()
 
@@ -382,7 +382,7 @@ def test_cloud_vault_write_secrets_generic_error(
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get
-        cloud_vault = CloudVault(username, password, host)
+        cloud_vault = CloudVault(username, password, host, None)
         mock_api_instance.put_blob_blob_blob_id_put.side_effect = ApiException
         with pytest.raises(VaultUnavailableError):
             cloud_vault.write_secrets(secrets)

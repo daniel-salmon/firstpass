@@ -34,7 +34,7 @@ class ConfigTest:
 @pytest.fixture(scope="function")
 def default_config_test(tmp_path: Path) -> ConfigTest:
     config_path = tmp_path / "config.yaml"
-    config = Config()
+    config = Config(local=True)
     config.to_yaml(config_path)
     config_test = ConfigTest(
         config=config, config_path=config_path, password="password"
@@ -46,7 +46,7 @@ def default_config_test(tmp_path: Path) -> ConfigTest:
 def vault_config_test(tmp_path: Path) -> ConfigTest:
     config_path = tmp_path / "config.yaml"
     vault_file = tmp_path / "vault"
-    config = Config(vault_file=vault_file)
+    config = Config(local=True, vault_file=vault_file)
     config.to_yaml(config_path)
     config_test = ConfigTest(
         config=config, config_path=config_path, password="password"
@@ -60,7 +60,7 @@ def existing_empty_vault_config_test(tmp_path: Path) -> ConfigTest:
     vault_file = tmp_path / "vault"
     password = "password"
     LocalVault(password=password, file=vault_file)
-    config = Config(vault_file=vault_file)
+    config = Config(local=True, vault_file=vault_file)
     config.to_yaml(config_path)
     config_test = ConfigTest(config=config, config_path=config_path, password=password)
     return config_test
@@ -102,7 +102,7 @@ def existing_non_empty_vault_config_test(tmp_path: Path) -> ConfigTest:
             password=SecretStr("onmytickles"),
         ),
     )
-    config = Config(vault_file=vault_file)
+    config = Config(local=True, vault_file=vault_file)
     config.to_yaml(config_path)
     config_test = ConfigTest(config=config, config_path=config_path, password=password)
     return config_test

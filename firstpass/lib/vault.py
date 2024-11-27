@@ -161,12 +161,17 @@ class LocalVault(Vault):
 
 
 class CloudVault(Vault):
-    def __init__(self, username: str, password: str, host: str) -> None:
+    def __init__(
+        self, username: str, password: str, host: str, access_token: str | None
+    ) -> None:
         super().__init__(password)
         self.username = username
         self.host = host
         self.configuration = firstpass_client.Configuration(host=host)
-        self.configuration.access_token = self._get_token()
+        if access_token is None:
+            self.configuration.access_token = self._get_token()
+        else:
+            self.configuration.access_token = access_token
         self.blob_id = self._get_blob_id()
 
     def _get_token(self) -> str:
