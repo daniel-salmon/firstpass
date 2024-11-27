@@ -1,6 +1,4 @@
 import shlex
-from dataclasses import dataclass
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -8,6 +6,7 @@ from click.testing import Result
 from pydantic import SecretStr
 from typer.testing import CliRunner
 
+from . import ConfigTest
 from firstpass import __version__
 from firstpass.cli import app
 from firstpass.utils import (
@@ -22,114 +21,6 @@ from firstpass.utils import (
 
 
 runner = CliRunner()
-
-
-@dataclass
-class ConfigTest:
-    config: Config | None
-    config_path: Path
-    password: str
-
-
-@pytest.fixture(scope="function")
-def default_config_test(tmp_path: Path) -> ConfigTest:
-    config_path = tmp_path / "config.yaml"
-    config = Config(local=True)
-    config.to_yaml(config_path)
-    config_test = ConfigTest(
-        config=config, config_path=config_path, password="password"
-    )
-    return config_test
-
-
-@pytest.fixture(scope="function")
-def vault_config_test(tmp_path: Path) -> ConfigTest:
-    config_path = tmp_path / "config.yaml"
-    vault_file = tmp_path / "vault"
-    config = Config(local=True, vault_file=vault_file)
-    config.to_yaml(config_path)
-    config_test = ConfigTest(
-        config=config, config_path=config_path, password="password"
-    )
-    return config_test
-
-
-@pytest.fixture(scope="function")
-def existing_empty_vault_config_test(tmp_path: Path) -> ConfigTest:
-    config_path = tmp_path / "config.yaml"
-    vault_file = tmp_path / "vault"
-    password = "password"
-    LocalVault(password=password, file=vault_file)
-    config = Config(local=True, vault_file=vault_file)
-    config.to_yaml(config_path)
-    config_test = ConfigTest(config=config, config_path=config_path, password=password)
-    return config_test
-
-
-@pytest.fixture(scope="function")
-def existing_non_empty_vault_config_test(tmp_path: Path) -> ConfigTest:
-    config_path = tmp_path / "config.yaml"
-    vault_file = tmp_path / "vault"
-    password = "password"
-    vault = LocalVault(password=password, file=vault_file)
-    vault.set(
-        secrets_type=SecretsType.passwords,
-        name="pizza",
-        secret=Password(
-            label="Pizza",
-            notes="is great",
-            username="pepperoni",
-            password=SecretStr("cheese"),
-        ),
-    )
-    vault.set(
-        secrets_type=SecretsType.passwords,
-        name="pickles",
-        secret=Password(
-            label="Pickles",
-            notes="are gross on pizza",
-            username="cucumber",
-            password=SecretStr("dill"),
-        ),
-    )
-    vault.set(
-        secrets_type=SecretsType.passwords,
-        name="tickles",
-        secret=Password(
-            label="Tickles",
-            notes="would be weird with pickles",
-            username="fickles",
-            password=SecretStr("onmytickles"),
-        ),
-    )
-    config = Config(local=True, vault_file=vault_file)
-    config.to_yaml(config_path)
-    config_test = ConfigTest(config=config, config_path=config_path, password=password)
-    return config_test
-
-
-@pytest.fixture(scope="function")
-def nonexistent_config_test(tmp_path: Path) -> ConfigTest:
-    config_path = tmp_path / "config.yaml"
-    config_test = ConfigTest(config=None, config_path=config_path, password="password")
-    return config_test
-
-
-@pytest.fixture(scope="function")
-def exists_but_empty_config_test(tmp_path: Path) -> ConfigTest:
-    config_path = tmp_path / "config.yaml"
-    config_path.touch()
-    config_test = ConfigTest(config=None, config_path=config_path, password="password")
-    return config_test
-
-
-@pytest.fixture(scope="function")
-def invalid_schema_config_test(tmp_path: Path) -> ConfigTest:
-    config_path = tmp_path / "config.yaml"
-    with open(config_path, "w", encoding="utf-8") as f:
-        f.write("not a valid config")
-    config_test = ConfigTest(config=None, config_path=config_path, password="password")
-    return config_test
 
 
 def run_cli(
@@ -151,10 +42,10 @@ def test_version():
 @pytest.mark.parametrize(
     "config_test_str, command_input, want_exit_code",
     [
-        ("default_config_test", "n\n", 1),
-        ("default_config_test", "y\n", 0),
-        ("vault_config_test", "n\n", 1),
-        ("vault_config_test", "y\n", 0),
+        ("default_local_config_test", "n\n", 1),
+        ("default_local_config_test", "y\n", 0),
+        ("local_vault_config_test", "n\n", 1),
+        ("local_vault_config_test", "y\n", 0),
         ("nonexistent_config_test", None, 0),
         ("exists_but_empty_config_test", None, 0),
     ],
@@ -181,8 +72,8 @@ def test_init_config(
 @pytest.mark.parametrize(
     "config_test_str, want_exit_code",
     [
-        ("default_config_test", 0),
-        ("vault_config_test", 0),
+        ("default_local_config_test", 0),
+        ("local_vault_config_test", 0),
     ],
 )
 def test_config_list_keys(
@@ -203,12 +94,12 @@ def test_config_list_keys(
 @pytest.mark.parametrize(
     "config_test_str, key, want_exit_code",
     [
-        ("default_config_test", "local", 0),
-        ("default_config_test", "vault_file", 0),
-        ("default_config_test", "nonexistent_key", 1),
-        ("vault_config_test", "local", 0),
-        ("vault_config_test", "vault_file", 0),
-        ("vault_config_test", "nonexistent_key", 1),
+        ("default_local_config_test", "local", 0),
+        ("default_local_config_test", "vault_file", 0),
+        ("default_local_config_test", "nonexistent_key", 1),
+        ("local_vault_config_test", "local", 0),
+        ("local_vault_config_test", "vault_file", 0),
+        ("local_vault_config_test", "nonexistent_key", 1),
     ],
 )
 def test_config_get(
@@ -229,14 +120,14 @@ def test_config_get(
 @pytest.mark.parametrize(
     "config_test_str, key, value, want_exit_code",
     [
-        ("default_config_test", "local", "True", 0),
-        ("default_config_test", "local", "notabool", 1),
-        ("default_config_test", "vault_file", "newvault", 0),
-        ("default_config_test", "nonexistent_key", "doesntmatter", 1),
-        ("vault_config_test", "local", "False", 0),
-        ("vault_config_test", "local", "notabool", 1),
-        ("vault_config_test", "vault_file", "newvault", 0),
-        ("vault_config_test", "nonexistent_key", "doesntmatter", 1),
+        ("default_local_config_test", "local", "True", 0),
+        ("default_local_config_test", "local", "notabool", 1),
+        ("default_local_config_test", "vault_file", "newvault", 0),
+        ("default_local_config_test", "nonexistent_key", "doesntmatter", 1),
+        ("local_vault_config_test", "local", "False", 0),
+        ("local_vault_config_test", "local", "notabool", 1),
+        ("local_vault_config_test", "vault_file", "newvault", 0),
+        ("local_vault_config_test", "nonexistent_key", "doesntmatter", 1),
     ],
 )
 def test_config_set(
@@ -263,10 +154,12 @@ def test_config_set(
 
 
 @pytest.mark.parametrize("secrets_type", [st for st in SecretsType])
-def test_vault_list_parts(secrets_type: SecretsType, default_config_test: ConfigTest):
+def test_vault_list_parts(
+    secrets_type: SecretsType, default_local_config_test: ConfigTest
+):
     secret_name = get_name_from_secrets_type(secrets_type)
     want_keys = secret_name.list_parts()
-    command_str = f"vault --config-path {default_config_test.config_path} list-parts {secrets_type}"
+    command_str = f"vault --config-path {default_local_config_test.config_path} list-parts {secrets_type}"
     result = run_cli(command_str=command_str, command_input=None, want_exit_code=0)
     got_keys = result.stdout.strip().split("\n")
     assert len(got_keys) == len(want_keys)
@@ -276,9 +169,9 @@ def test_vault_list_parts(secrets_type: SecretsType, default_config_test: Config
 @pytest.mark.parametrize(
     "config_test_str, command_input, password, want_exit_code",
     [
-        ("vault_config_test", "password\ndifferentpassword", "password", 1),
-        ("vault_config_test", "password\npassword", "password", 0),
-        ("existing_empty_vault_config_test", "password\npassword", "password", 1),
+        ("local_vault_config_test", "password\ndifferentpassword", "password", 1),
+        ("local_vault_config_test", "password\npassword", "password", 0),
+        ("existing_empty_local_vault_config_test", "password\npassword", "password", 1),
     ],
 )
 def test_vault_init(
@@ -304,10 +197,10 @@ def test_vault_init(
 @pytest.mark.parametrize(
     "config_test_str, command_input, want_exit_code",
     [
-        ("existing_empty_vault_config_test", "n\n", 1),
-        ("existing_empty_vault_config_test", "y\n", 0),
-        ("existing_non_empty_vault_config_test", "n\n", 1),
-        ("existing_non_empty_vault_config_test", "y\n", 0),
+        ("existing_empty_local_vault_config_test", "n\n", 1),
+        ("existing_empty_local_vault_config_test", "y\n", 0),
+        ("existing_non_empty_local_vault_config_test", "n\n", 1),
+        ("existing_non_empty_local_vault_config_test", "y\n", 0),
     ],
 )
 def test_vault_remove(
@@ -332,8 +225,8 @@ def test_vault_remove(
 @pytest.mark.parametrize(
     "config_test_str, secrets_type, want_exit_code",
     [
-        ("existing_empty_vault_config_test", SecretsType.passwords, 0),
-        ("existing_non_empty_vault_config_test", SecretsType.passwords, 0),
+        ("existing_empty_local_vault_config_test", SecretsType.passwords, 0),
+        ("existing_non_empty_local_vault_config_test", SecretsType.passwords, 0),
     ],
 )
 def test_vault_list_names(
@@ -369,7 +262,7 @@ def test_vault_list_names(
     "config_test_str, secrets_type, name, want_secret, command_input, want_exit_code",
     [
         (
-            "existing_empty_vault_config_test",
+            "existing_empty_local_vault_config_test",
             SecretsType.passwords,
             "pybites",
             Password(
@@ -382,7 +275,7 @@ def test_vault_list_names(
             0,
         ),
         (
-            "existing_empty_vault_config_test",
+            "existing_empty_local_vault_config_test",
             SecretsType.passwords,
             "pybites",
             Password(
@@ -395,7 +288,7 @@ def test_vault_list_names(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "pizza",
             Password(
@@ -408,7 +301,7 @@ def test_vault_list_names(
             1,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "pepperoni",
             Password(
@@ -452,7 +345,7 @@ def test_vault_new(
     "config_test_str, secrets_type, name, secret_part, show, copy, want_exit_code",
     [
         (
-            "existing_empty_vault_config_test",
+            "existing_empty_local_vault_config_test",
             SecretsType.passwords,
             "name_that_doesnt_exist",
             SecretPart.all,
@@ -461,7 +354,7 @@ def test_vault_new(
             1,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "pizza",
             SecretPart.all,
@@ -470,7 +363,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "pizza",
             SecretPart.all,
@@ -479,7 +372,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "pizza",
             SecretPart.all,
@@ -488,7 +381,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "pizza",
             SecretPart.all,
@@ -497,7 +390,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "pickles",
             SecretPart.label,
@@ -506,7 +399,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "pickles",
             SecretPart.label,
@@ -515,7 +408,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "pickles",
             SecretPart.label,
@@ -524,7 +417,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "pickles",
             SecretPart.label,
@@ -533,7 +426,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "tickles",
             SecretPart.notes,
@@ -542,7 +435,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "tickles",
             SecretPart.notes,
@@ -551,7 +444,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "tickles",
             SecretPart.notes,
@@ -560,7 +453,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "tickles",
             SecretPart.notes,
@@ -569,7 +462,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "tickles",
             SecretPart.username,
@@ -578,7 +471,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "tickles",
             SecretPart.username,
@@ -587,7 +480,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "tickles",
             SecretPart.username,
@@ -596,7 +489,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "tickles",
             SecretPart.username,
@@ -605,7 +498,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "tickles",
             SecretPart.password,
@@ -614,7 +507,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "tickles",
             SecretPart.password,
@@ -623,7 +516,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "tickles",
             SecretPart.password,
@@ -632,7 +525,7 @@ def test_vault_new(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "tickles",
             SecretPart.password,
@@ -691,7 +584,7 @@ def test_vault_get(
     "config_test_str, secrets_type, name, secret_part, value, want_exit_code",
     [
         (
-            "existing_empty_vault_config_test",
+            "existing_empty_local_vault_config_test",
             SecretsType.passwords,
             "name_that_doesnt_exist",
             SecretPart.label,
@@ -699,7 +592,7 @@ def test_vault_get(
             1,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "pizza",
             SecretPart.all,
@@ -707,7 +600,7 @@ def test_vault_get(
             1,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "name_that_doesnt_exist",
             SecretPart.password,
@@ -715,7 +608,7 @@ def test_vault_get(
             1,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "pizza",
             SecretPart.label,
@@ -723,7 +616,7 @@ def test_vault_get(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "pizza",
             SecretPart.notes,
@@ -731,7 +624,7 @@ def test_vault_get(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "pizza",
             SecretPart.username,
@@ -739,7 +632,7 @@ def test_vault_get(
             0,
         ),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "pizza",
             SecretPart.password,
@@ -782,16 +675,31 @@ def test_vault_set(
     "config_test_str, secrets_type, name, want_exit_code",
     [
         (
-            "existing_empty_vault_config_test",
+            "existing_empty_local_vault_config_test",
             SecretsType.passwords,
             "name_that_doesnt_exist",
             0,
         ),
-        ("existing_non_empty_vault_config_test", SecretsType.passwords, "pizza", 0),
-        ("existing_non_empty_vault_config_test", SecretsType.passwords, "pickles", 0),
-        ("existing_non_empty_vault_config_test", SecretsType.passwords, "tickles", 0),
         (
-            "existing_non_empty_vault_config_test",
+            "existing_non_empty_local_vault_config_test",
+            SecretsType.passwords,
+            "pizza",
+            0,
+        ),
+        (
+            "existing_non_empty_local_vault_config_test",
+            SecretsType.passwords,
+            "pickles",
+            0,
+        ),
+        (
+            "existing_non_empty_local_vault_config_test",
+            SecretsType.passwords,
+            "tickles",
+            0,
+        ),
+        (
+            "existing_non_empty_local_vault_config_test",
             SecretsType.passwords,
             "name_that_doesnt_exist",
             0,
