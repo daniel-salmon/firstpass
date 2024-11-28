@@ -13,6 +13,12 @@ runner = CliRunner()
     "cloud_test_str, command_input, want_exit_code",
     [
         ("default_cloud_test_user_does_not_exist", "password\npassword\ny\n", 0),
+        (
+            "default_cloud_test_user_does_not_exist",
+            "password\ndifferentpassword\ny\n",
+            1,
+        ),
+        ("default_cloud_test_user_exists", "password\npassword\ny\n", 1),
     ],
 )
 def test_vault_init(

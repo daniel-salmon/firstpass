@@ -242,14 +242,30 @@ def vault_remove(
     if config is None:
         raise AssertionError("config is None")
     delete = typer.confirm(
-        f"Are you sure you want to delete your vault at {config.vault_file}?"
+        f"Are you sure you want to delete your vault {'at ' + str(config.vault_file) if config.local else ''}?"
     )
     if not delete:
         raise typer.Abort()
-    try:
-        config.vault_file.unlink()
-    except FileNotFoundError:
-        pass
+    if config.local:
+        try:
+            config.vault_file.unlink()
+        except FileNotFoundError:
+            pass
+    else:
+        vault = state.get("vault")
+        if vault is None:
+            raise AssertionError("vault is None")
+        assert isinstance(vault, CloudVault)
+        configuration = firstpass_client.Configuration(
+            host=config.cloud_host, access_token=vault.configuration.access_token
+        )
+        with firstpass_client.ApiClient(configuration) as api_client:
+            api_instance = firstpass_client.DefaultApi(api_client)
+            try:
+                api_instance.delete_user_user_delete()
+            except firstpass_client.ApiException:
+                print("There seems to be an issue, try that again")
+                raise typer.Exit(1)
     print("Vault successfully removed")
 
 

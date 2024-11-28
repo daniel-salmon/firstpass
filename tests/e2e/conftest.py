@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Generator
 
 import firstpass_client
 import pytest
@@ -113,7 +114,9 @@ def invalid_schema_config_test(tmp_path: Path) -> ConfigTest:
 
 
 @pytest.fixture(scope="function")
-def default_cloud_test_user_does_not_exist(tmp_path: Path) -> CloudTest:
+def default_cloud_test_user_does_not_exist(
+    tmp_path: Path,
+) -> Generator[CloudTest, None, None]:
     password = "password"
     config_path = tmp_path / "config.yaml"
     config = Config(local=False, cloud_host=HOST)
@@ -132,5 +135,32 @@ def default_cloud_test_user_does_not_exist(tmp_path: Path) -> CloudTest:
         except firstpass_client.ApiException as e:
             if e.status != 401:
                 raise
+        yield CloudTest(config=config, config_path=config_path, password=password)
+        try:
+            token = api_instance.token_token_post(
+                username=config.username, password=Vault.hash_password(password)
+            )
+            configuration.access_token = token.access_token
+            api_instance.delete_user_user_delete()
+        except firstpass_client.ApiException as e:
+            if e.status != 401:
+                raise
 
-    return CloudTest(config=config, config_path=config_path, password=password)
+
+@pytest.fixture(scope="function")
+def default_cloud_test_user_exists(tmp_path: Path) -> Generator[CloudTest, None, None]:
+    password = "password"
+    config_path = tmp_path / "config.yaml"
+    config = Config(local=False, cloud_host=HOST)
+    config.to_yaml(config_path)
+
+    configuration = firstpass_client.Configuration(host=config.cloud_host)
+    user_create = firstpass_client.UserCreate(
+        username=config.username, password=Vault.hash_password(password)
+    )
+    with firstpass_client.ApiClient(configuration) as api_client:
+        api_instance = firstpass_client.DefaultApi(api_client)
+        token = api_instance.post_user_user_post(user_create)
+        configuration.access_token = token.access_token
+        yield CloudTest(config=config, config_path=config_path, password=password)
+        api_instance.delete_user_user_delete()
