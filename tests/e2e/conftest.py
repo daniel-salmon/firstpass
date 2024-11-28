@@ -1,10 +1,14 @@
 import pytest
 from pathlib import Path
 
+import firstpass_client
 from pydantic import SecretStr
 
-from . import ConfigTest
-from firstpass.utils import Config, LocalVault, SecretsType, Password
+from . import CloudTest, ConfigTest
+from firstpass.utils import Config, LocalVault, Password, SecretsType, Vault
+
+
+HOST = "http://localhost:8000"
 
 
 @pytest.fixture(scope="function")
@@ -106,3 +110,27 @@ def invalid_schema_config_test(tmp_path: Path) -> ConfigTest:
         f.write("not a valid config")
     config_test = ConfigTest(config=None, config_path=config_path, password="password")
     return config_test
+
+
+@pytest.fixture(scope="function")
+def default_cloud_test_user_does_not_exist(tmp_path: Path) -> CloudTest:
+    password = "password"
+    config_path = tmp_path / "config.yaml"
+    config = Config(local=False, cloud_host=HOST)
+    config.to_yaml(config_path)
+
+    # Ensure the user doesn't exist in the backend
+    configuration = firstpass_client.Configuration(host=config.cloud_host)
+    with firstpass_client.ApiClient(configuration) as api_client:
+        api_instance = firstpass_client.DefaultApi(api_client)
+        try:
+            token = api_instance.token_token_post(
+                username=config.username, password=Vault.hash_password(password)
+            )
+            configuration.access_token = token.access_token
+            api_instance.delete_user_user_delete()
+        except firstpass_client.ApiException as e:
+            if e.status != 401:
+                raise
+
+    return CloudTest(config=config, config_path=config_path, password=password)

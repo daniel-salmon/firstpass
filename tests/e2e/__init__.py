@@ -10,6 +10,13 @@ from firstpass.utils import Config
 
 
 @dataclass
+class CloudTest:
+    config: Config | None
+    config_path: Path
+    password: str
+
+
+@dataclass
 class ConfigTest:
     config: Config | None
     config_path: Path
@@ -26,5 +33,6 @@ def run_cli(
 ) -> Result:
     command = shlex.split(command_str)
     result = runner.invoke(app, command, input=command_input)
+    print(result.stdout)
     assert result.exit_code == want_exit_code
     return result
