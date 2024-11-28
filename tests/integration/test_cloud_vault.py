@@ -1,6 +1,5 @@
-import pytest
-
 import firstpass_client
+import pytest
 from pydantic import BaseModel, SecretStr
 
 from firstpass.utils import (
@@ -12,7 +11,6 @@ from firstpass.utils import (
     Vault,
     VaultInvalidUsernameOrPasswordError,
 )
-
 
 HOST = "http://localhost:8000"
 

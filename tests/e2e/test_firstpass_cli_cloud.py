@@ -1,10 +1,10 @@
 import pytest
 from typer.testing import CliRunner
 
-from . import run_cli
 from firstpass.cli import app
 from firstpass.utils import CloudVault
 
+from . import run_cli
 
 runner = CliRunner()
 

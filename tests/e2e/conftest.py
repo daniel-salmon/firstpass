@@ -1,12 +1,12 @@
-import pytest
 from pathlib import Path
 
 import firstpass_client
+import pytest
 from pydantic import SecretStr
 
-from . import CloudTest, ConfigTest
 from firstpass.utils import Config, LocalVault, Password, SecretsType, Vault
 
+from . import CloudTest, ConfigTest
 
 HOST = "http://localhost:8000"
 

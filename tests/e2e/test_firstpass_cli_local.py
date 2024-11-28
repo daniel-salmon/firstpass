@@ -4,7 +4,6 @@ import pytest
 from pydantic import SecretStr
 from typer.testing import CliRunner
 
-from . import ConfigTest, run_cli
 from firstpass import __version__
 from firstpass.cli import app
 from firstpass.utils import (
@@ -17,6 +16,7 @@ from firstpass.utils import (
     get_name_from_secrets_type,
 )
 
+from . import ConfigTest, run_cli
 
 runner = CliRunner()
 

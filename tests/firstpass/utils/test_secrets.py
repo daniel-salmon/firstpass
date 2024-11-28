@@ -1,5 +1,4 @@
 import pytest
-
 from pydantic import SecretStr
 
 from firstpass.utils import Password, Secrets

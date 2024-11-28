@@ -1,12 +1,13 @@
 from pathlib import Path
 from typing import Annotated, TypedDict
 
+import firstpass_client
 import pyperclip
 import typer
-import firstpass_client
 from pydantic import SecretStr, ValidationError
 
-from . import __version__, name as app_name
+from . import __version__
+from . import name as app_name
 from .utils import (
     CloudVault,
     Config,

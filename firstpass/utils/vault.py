@@ -5,18 +5,18 @@ from functools import cached_property
 from pathlib import Path
 
 import firstpass_client
-from firstpass_client import ApiException, Blob
-from firstpass_client.exceptions import UnauthorizedException
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from firstpass_client import ApiException, Blob
+from firstpass_client.exceptions import UnauthorizedException
 
-from .secrets import Secret, Secrets, SecretsType
 from .exceptions import (
     VaultInvalidUsernameOrPasswordError,
     VaultUnavailableError,
     VaultUndecryptableError,
 )
+from .secrets import Secret, Secrets, SecretsType
 
 SALT_SIZE_BYTES = 16
 PBKDF2_ITERATIONS = 600_000
