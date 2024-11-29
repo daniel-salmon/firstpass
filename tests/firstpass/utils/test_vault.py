@@ -508,6 +508,25 @@ def test_cloud_vault_remove(username: str, password: str, host: str) -> None:
         ("bob", "password", "http://example.com"),
     ],
 )
+def test_cloud_vault_remove_unauthorized_error(
+    username: str, password: str, host: str
+) -> None:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
+        mock_api_instance = mock_client.DefaultApi.return_value
+        mock_api_instance.delete_user_user_delete.side_effect = UnauthorizedException
+        cloud_vault = CloudVault(
+            username=username, password=password, host=host, access_token=None
+        )
+        with pytest.raises(VaultInvalidUsernameOrPasswordError):
+            cloud_vault.remove()
+
+
+@pytest.mark.parametrize(
+    "username, password, host",
+    [
+        ("bob", "password", "http://example.com"),
+    ],
+)
 def test_cloud_vault_remove_generic_error(
     username: str, password: str, host: str
 ) -> None:

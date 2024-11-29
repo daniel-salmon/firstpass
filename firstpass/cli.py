@@ -83,7 +83,9 @@ def password_check(password: str) -> str:
                 access_token=None,
             )
         except VaultInvalidUsernameOrPasswordError:
-            print("Invalid username or password. Likely a problem with your password.")
+            print(
+                "Invalid username or password. Have you initialized a vault before? If not run `vault init`. Otherwise, this is likely a problem with your password."
+            )
             raise typer.Exit(1)
         except VaultUnavailableError:
             print("There seems to be an issue, try that again")

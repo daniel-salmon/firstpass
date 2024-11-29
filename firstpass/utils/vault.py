@@ -260,5 +260,7 @@ class CloudVault(Vault):
             api_instance = firstpass_client.DefaultApi(api_client)
             try:
                 api_instance.delete_user_user_delete()
-            except ApiException:
+            except UnauthorizedException:
+                raise VaultInvalidUsernameOrPasswordError
+            except ApiException as e:
                 raise VaultUnavailableError

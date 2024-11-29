@@ -5,7 +5,15 @@ import firstpass_client
 import pytest
 from pydantic import SecretStr
 
-from firstpass.utils import CloudVault, Config, LocalVault, Password, SecretsType, Vault
+from firstpass.utils import (
+    CloudVault,
+    Config,
+    LocalVault,
+    Password,
+    SecretsType,
+    Vault,
+    VaultInvalidUsernameOrPasswordError,
+)
 
 from . import CloudTest, ConfigTest
 
@@ -170,4 +178,8 @@ def default_cloud_test_user_exists(tmp_path: Path) -> Generator[CloudTest, None,
         access_token=token.access_token,
     )
     yield CloudTest(config=config, config_path=config_path, password=password)
-    cloud_vault.remove()
+    try:
+        cloud_vault.remove()
+    except VaultInvalidUsernameOrPasswordError:
+        # The user was already removed as part of the test
+        pass
