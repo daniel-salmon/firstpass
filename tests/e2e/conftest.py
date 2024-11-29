@@ -10,6 +10,7 @@ from firstpass.utils import (
     Config,
     LocalVault,
     Password,
+    Secrets,
     SecretsType,
     Vault,
     VaultInvalidUsernameOrPasswordError,
@@ -162,7 +163,9 @@ def default_cloud_test_user_does_not_exist(
 
 
 @pytest.fixture(scope="function")
-def default_cloud_test_user_exists(tmp_path: Path) -> Generator[CloudTest, None, None]:
+def default_cloud_test_user_exists_empty_vault(
+    tmp_path: Path,
+) -> Generator[CloudTest, None, None]:
     password = "password"
     config_path = tmp_path / "config.yaml"
     config = Config(local=False, cloud_host=HOST)
@@ -176,6 +179,45 @@ def default_cloud_test_user_exists(tmp_path: Path) -> Generator[CloudTest, None,
         password=password,
         host=config.cloud_host,
         access_token=token.access_token,
+    )
+    cloud_vault.write_secrets(Secrets())
+    yield CloudTest(config=config, config_path=config_path, password=password)
+    try:
+        cloud_vault.remove()
+    except VaultInvalidUsernameOrPasswordError:
+        # The user was already removed as part of the test
+        pass
+
+
+@pytest.fixture(scope="function")
+def default_cloud_test_user_exists_pizza_vault(
+    tmp_path: Path,
+) -> Generator[CloudTest, None, None]:
+    password = "password"
+    config_path = tmp_path / "config.yaml"
+    config = Config(local=False, cloud_host=HOST)
+    config.to_yaml(config_path)
+
+    token = CloudVault.create_new_user(
+        username=config.username, password=password, host=config.cloud_host
+    )
+    cloud_vault = CloudVault(
+        username=config.username,
+        password=password,
+        host=config.cloud_host,
+        access_token=token.access_token,
+    )
+    cloud_vault.write_secrets(
+        Secrets(
+            passwords={
+                "pizza": Password(
+                    label="Pizza",
+                    notes="NY Style",
+                    username="pepperoni",
+                    password=SecretStr("sausage"),
+                )
+            },
+        )
     )
     yield CloudTest(config=config, config_path=config_path, password=password)
     try:
