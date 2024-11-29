@@ -191,3 +191,44 @@ def test_vault_new(
     )
     got_secret = vault.get(secrets_type, name)
     assert got_secret == want_secret
+
+
+@pytest.mark.parametrize(
+    "cloud_test_str, secrets_type, want_exit_code",
+    [
+        ("default_cloud_test_user_exists_empty_vault", SecretsType.passwords, 0),
+        ("default_cloud_test_user_exists_pizza_vault", SecretsType.passwords, 0),
+    ],
+)
+def test_vault_list_names(
+    cloud_test_str: str,
+    secrets_type: SecretsType,
+    want_exit_code: int,
+    request: pytest.FixtureRequest,
+) -> None:
+    cloud_test = request.getfixturevalue(cloud_test_str)
+    passworded_command_input = f"{cloud_test.password}\n"
+    command_str = (
+        f"vault --config-path {cloud_test.config_path} list-names {secrets_type}"
+    )
+    result = run_cli(
+        runner=runner,
+        app=app,
+        command_str=command_str,
+        command_input=passworded_command_input,
+        want_exit_code=want_exit_code,
+    )
+    if want_exit_code != 0:
+        return
+    vault = CloudVault(
+        username=cloud_test.config.username,
+        password=cloud_test.password,
+        host=cloud_test.config.cloud_host,
+        access_token=None,
+    )
+    want_names = vault.list_names(secrets_type)
+    output = result.stdout.strip().split("\n")
+    # Remove the Password: prompt
+    output.pop(0)
+    assert len(output) == len(want_names)
+    assert set(output) == want_names

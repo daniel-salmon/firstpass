@@ -215,7 +215,13 @@ def default_cloud_test_user_exists_pizza_vault(
                     notes="NY Style",
                     username="pepperoni",
                     password=SecretStr("sausage"),
-                )
+                ),
+                "pepperoni": Password(
+                    label="Pepperoni",
+                    notes="NY Style",
+                    username="cheese",
+                    password=SecretStr("tomato"),
+                ),
             },
         )
     )
