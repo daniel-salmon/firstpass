@@ -389,3 +389,91 @@ def test_vault_get(
     pyperclip_mock.assert_called_with(
         value if secret_part != SecretPart.password else value.get_secret_value()
     )
+
+
+@pytest.mark.parametrize(
+    "cloud_test_str, secrets_type, name, secret_part, value, want_exit_code",
+    [
+        (
+            "default_cloud_test_user_exists_empty_vault",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.username,
+            "pepperoni",
+            1,
+        ),
+        (
+            "default_cloud_test_user_exists_pizza_vault",
+            SecretsType.passwords,
+            "name_that_doesnt_exist",
+            SecretPart.username,
+            "pepperoni",
+            1,
+        ),
+        (
+            "default_cloud_test_user_exists_pizza_vault",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.username,
+            "pepperoni",
+            0,
+        ),
+        (
+            "default_cloud_test_user_exists_pizza_vault",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.label,
+            "meatball",
+            0,
+        ),
+        (
+            "default_cloud_test_user_exists_pizza_vault",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.notes,
+            "Chicago style",
+            0,
+        ),
+        (
+            "default_cloud_test_user_exists_pizza_vault",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.password,
+            "new password",
+            0,
+        ),
+    ],
+)
+def test_vault_set(
+    cloud_test_str: str,
+    secrets_type: SecretsType,
+    name: str,
+    secret_part: SecretPart,
+    value: str,
+    want_exit_code: int,
+    request: pytest.FixtureRequest,
+):
+    cloud_test = request.getfixturevalue(cloud_test_str)
+    passworded_command_input = f"{cloud_test.password}\n"
+    command_str = f"vault --config-path {cloud_test.config_path} set {secrets_type} {name} {secret_part} '{value}'"
+    _ = run_cli(
+        runner=runner,
+        app=app,
+        command_str=command_str,
+        command_input=passworded_command_input,
+        want_exit_code=want_exit_code,
+    )
+    if want_exit_code != 0:
+        return
+    vault = CloudVault(
+        username=cloud_test.config.username,
+        password=cloud_test.password,
+        host=cloud_test.config.cloud_host,
+        access_token=None,
+    )
+    if secret_part == SecretPart.password:
+        assert (
+            getattr(vault.get(secrets_type, name), secret_part)
+        ).get_secret_value() == value
+        return
+    assert getattr(vault.get(secrets_type, name), secret_part) == value
