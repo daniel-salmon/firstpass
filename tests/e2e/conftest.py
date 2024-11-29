@@ -5,7 +5,7 @@ import firstpass_client
 import pytest
 from pydantic import SecretStr
 
-from firstpass.utils import Config, LocalVault, Password, SecretsType, Vault
+from firstpass.utils import CloudVault, Config, LocalVault, Password, SecretsType, Vault
 
 from . import CloudTest, ConfigTest
 
@@ -123,19 +123,25 @@ def default_cloud_test_user_does_not_exist(
     config.to_yaml(config_path)
 
     # Ensure the user doesn't exist in the backend
+    # If the user already exists, then creating a new user with the same username
+    # will raise an uncaught exception causing the test to fail.
+    # Unfortunately, in general there is nothing we can do here except require manual
+    # intervention, i.e., deleting that user from the db because the user was likely
+    # created outside of this test suite and thus has an unknown password
+    token = CloudVault.create_new_user(
+        username=config.username, password=password, host=config.cloud_host
+    )
+    cloud_vault = CloudVault(
+        username=config.username,
+        password=password,
+        host=config.cloud_host,
+        access_token=token.access_token,
+    )
+    cloud_vault.remove()
+    yield CloudTest(config=config, config_path=config_path, password=password)
     configuration = firstpass_client.Configuration(host=config.cloud_host)
     with firstpass_client.ApiClient(configuration) as api_client:
         api_instance = firstpass_client.DefaultApi(api_client)
-        try:
-            token = api_instance.token_token_post(
-                username=config.username, password=Vault.hash_password(password)
-            )
-            configuration.access_token = token.access_token
-            api_instance.delete_user_user_delete()
-        except firstpass_client.ApiException as e:
-            if e.status != 401:
-                raise
-        yield CloudTest(config=config, config_path=config_path, password=password)
         try:
             token = api_instance.token_token_post(
                 username=config.username, password=Vault.hash_password(password)
@@ -154,13 +160,14 @@ def default_cloud_test_user_exists(tmp_path: Path) -> Generator[CloudTest, None,
     config = Config(local=False, cloud_host=HOST)
     config.to_yaml(config_path)
 
-    configuration = firstpass_client.Configuration(host=config.cloud_host)
-    user_create = firstpass_client.UserCreate(
-        username=config.username, password=Vault.hash_password(password)
+    token = CloudVault.create_new_user(
+        username=config.username, password=password, host=config.cloud_host
     )
-    with firstpass_client.ApiClient(configuration) as api_client:
-        api_instance = firstpass_client.DefaultApi(api_client)
-        token = api_instance.post_user_user_post(user_create)
-        configuration.access_token = token.access_token
-        yield CloudTest(config=config, config_path=config_path, password=password)
-        api_instance.delete_user_user_delete()
+    cloud_vault = CloudVault(
+        username=config.username,
+        password=password,
+        host=config.cloud_host,
+        access_token=token.access_token,
+    )
+    yield CloudTest(config=config, config_path=config_path, password=password)
+    cloud_vault.remove()
