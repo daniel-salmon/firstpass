@@ -16,3 +16,7 @@ class VaultUnavailableError(Exception):
 
 class VaultUndecryptableError(Exception):
     pass
+
+
+class VaultUsernameAlreadyExistsError(Exception):
+    pass

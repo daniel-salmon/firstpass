@@ -5,6 +5,7 @@ from .exceptions import (
     VaultInvalidUsernameOrPasswordError,
     VaultUnavailableError,
     VaultUndecryptableError,
+    VaultUsernameAlreadyExistsError,
 )
 from .secrets import (
     Password,
@@ -32,6 +33,7 @@ __all__ = [
     "VaultInvalidUsernameOrPasswordError",
     "VaultUnavailableError",
     "VaultUndecryptableError",
+    "VaultUsernameAlreadyExistsError",
     "get_name_from_secrets_type",
     "update_config",
 ]

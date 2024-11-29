@@ -183,6 +183,15 @@ def vault_init():
     if config.local and config.vault_file.exists():
         print(f"Nothing to initialize, a vault already exists at {config.vault_file}")
         raise typer.Exit(1)
+    if not config.local:
+        username_correct = typer.confirm(
+            f"Please confirm your username: {config.username}"
+        )
+        if not username_correct:
+            print(
+                "Please set your username with `config set username <desired username>`"
+            )
+            raise typer.Abort()
     password1 = typer.prompt(
         "Please enter your new firstpass password", hide_input=True
     )
@@ -197,29 +206,12 @@ def vault_init():
         config.vault_file.parent.mkdir(exist_ok=True, parents=True)
         config.vault_file.touch(exist_ok=True)
         LocalVault(password, config.vault_file)
+        print("Successfully initialized vault!")
         raise typer.Exit()
-    username_correct = typer.confirm(f"Please confirm your username: {config.username}")
-    if not username_correct:
-        print("Please set your username with `config set username <desired username>`")
-        raise typer.Abort()
-    hashed_password = Vault.hash_password(password1)
-    user_create = firstpass_client.UserCreate(
-        username=config.username, password=hashed_password
-    )
-    configuration = firstpass_client.Configuration(host=config.cloud_host)
-    with firstpass_client.ApiClient(configuration) as api_client:
-        api_instance = firstpass_client.DefaultApi(api_client)
-        try:
-            token = api_instance.post_user_user_post(user_create)
-        except firstpass_client.ApiException as e:
-            if e.status == 409:
-                print(
-                    "Username already exists. Please set a new username with `config set username <desired username>`"
-                )
-                raise typer.Exit(1)
-            print("There seems to be an issue, try that again")
-            raise typer.Exit(1)
     try:
+        token = CloudVault.create_new_user(
+            username=config.username, password=password1, host=config.cloud_host
+        )
         vault = CloudVault(
             username=config.username,
             password=password,
@@ -227,9 +219,15 @@ def vault_init():
             access_token=token.access_token,
         )
         vault.write_secrets(Secrets())
+    except VaultUsernameAlreadyExistsError:
+        print(
+            "Username already exists. Please set a new username with `config set username <desired username>`"
+        )
+        raise typer.Exit(1)
     except VaultUnavailableError:
         print("There seems to be an issue, try that again")
         raise typer.Exit(1)
+    print("Successfully intialized vault!")
 
 
 @vault_app.command(name="remove")
@@ -238,34 +236,21 @@ def vault_remove(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
-    config = state.get("config")
+    config, vault = state.get("config"), state.get("vault")
     if config is None:
         raise AssertionError("config is None")
+    if vault is None:
+        raise AssertionError("vault is None")
     delete = typer.confirm(
         f"Are you sure you want to delete your vault {'at ' + str(config.vault_file) if config.local else ''}?"
     )
     if not delete:
         raise typer.Abort()
-    if config.local:
-        try:
-            config.vault_file.unlink()
-        except FileNotFoundError:
-            pass
-    else:
-        vault = state.get("vault")
-        if vault is None:
-            raise AssertionError("vault is None")
-        assert isinstance(vault, CloudVault)
-        configuration = firstpass_client.Configuration(
-            host=config.cloud_host, access_token=vault.configuration.access_token
-        )
-        with firstpass_client.ApiClient(configuration) as api_client:
-            api_instance = firstpass_client.DefaultApi(api_client)
-            try:
-                api_instance.delete_user_user_delete()
-            except firstpass_client.ApiException:
-                print("There seems to be an issue, try that again")
-                raise typer.Exit(1)
+    try:
+        vault.remove()
+    except VaultUnavailableError:
+        print("There seems to be an issue, try that again")
+        raise typer.Exit(1)
     print("Vault successfully removed")
 
 
