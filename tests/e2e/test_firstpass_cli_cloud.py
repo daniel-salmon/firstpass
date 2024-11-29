@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
 from pydantic import SecretStr
 from typer.testing import CliRunner
@@ -7,6 +9,7 @@ from firstpass.utils import (
     CloudVault,
     Password,
     Secret,
+    SecretPart,
     SecretsType,
     VaultInvalidUsernameOrPasswordError,
 )
@@ -232,3 +235,157 @@ def test_vault_list_names(
     output.pop(0)
     assert len(output) == len(want_names)
     assert set(output) == want_names
+
+
+@pytest.mark.parametrize(
+    "cloud_test_str, secrets_type, name, secret_part, show, copy, want_exit_code",
+    [
+        (
+            "default_cloud_test_user_exists_pizza_vault",
+            SecretsType.passwords,
+            "name_that_doesnt_exist",
+            SecretPart.all,
+            True,
+            True,
+            1,
+        ),
+        (
+            "default_cloud_test_user_exists_pizza_vault",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.all,
+            True,
+            True,
+            0,
+        ),
+        (
+            "default_cloud_test_user_exists_pizza_vault",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.all,
+            True,
+            False,
+            0,
+        ),
+        (
+            "default_cloud_test_user_exists_pizza_vault",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.username,
+            True,
+            True,
+            0,
+        ),
+        (
+            "default_cloud_test_user_exists_pizza_vault",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.username,
+            False,
+            True,
+            0,
+        ),
+        (
+            "default_cloud_test_user_exists_pizza_vault",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.username,
+            False,
+            False,
+            0,
+        ),
+        (
+            "default_cloud_test_user_exists_pizza_vault",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.password,
+            True,
+            True,
+            0,
+        ),
+        (
+            "default_cloud_test_user_exists_pizza_vault",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.password,
+            False,
+            True,
+            0,
+        ),
+        (
+            "default_cloud_test_user_exists_pizza_vault",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.password,
+            True,
+            False,
+            0,
+        ),
+        (
+            "default_cloud_test_user_exists_pizza_vault",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.password,
+            False,
+            False,
+            0,
+        ),
+        (
+            "default_cloud_test_user_exists_empty_vault",
+            SecretsType.passwords,
+            "pizza",
+            SecretPart.password,
+            True,
+            True,
+            1,
+        ),
+    ],
+)
+@patch("firstpass.cli.pyperclip.copy")
+def test_vault_get(
+    pyperclip_mock: MagicMock,
+    cloud_test_str: str,
+    secrets_type: SecretsType,
+    name: str,
+    secret_part: SecretPart,
+    show: bool,
+    copy: bool,
+    want_exit_code: int,
+    request: pytest.FixtureRequest,
+):
+    cloud_test = request.getfixturevalue(cloud_test_str)
+    passworded_command_input = f"{cloud_test.password}\n"
+    command_str = f"vault --config-path {cloud_test.config_path} get {secrets_type} {name} {secret_part} {'--show' if show else ''} {'--copy' if copy else ''}"
+    result = run_cli(
+        runner=runner,
+        app=app,
+        command_str=command_str,
+        command_input=passworded_command_input,
+        want_exit_code=want_exit_code,
+    )
+    if want_exit_code != 0:
+        return
+    vault = CloudVault(
+        username=cloud_test.config.username,
+        password=cloud_test.password,
+        host=cloud_test.config.cloud_host,
+        access_token=None,
+    )
+    output = result.stdout.strip().split("\n")
+    # Remove the Password: prompt
+    output.pop(0)
+    if secret_part == SecretPart.all:
+        pyperclip_mock.assert_not_called()
+        assert output[-1] == str(vault.get(secrets_type, name))
+        return
+    value = getattr(vault.get(secrets_type, name), secret_part)
+    if secret_part == SecretPart.password and show:
+        assert output[-1] == value.get_secret_value()
+    else:
+        assert output[-1] == str(value)
+    if not copy:
+        pyperclip_mock.assert_not_called()
+        return
+    pyperclip_mock.assert_called_with(
+        value if secret_part != SecretPart.password else value.get_secret_value()
+    )
