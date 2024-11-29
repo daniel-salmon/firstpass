@@ -205,7 +205,7 @@ def test_local_vault_remove(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "username, password, host, token, user_get, specify_access_token_in_init",
+    "username, password, host, token, user_get",
     [
         (
             "bob",
@@ -213,15 +213,6 @@ def test_local_vault_remove(tmp_path: Path) -> None:
             "https://firstpass.com",
             Token(access_token="fake token", token_type="bearer"),
             UserGet(username="bob", blob_id="e2f2f1b7-83e9-4677-9438-8123445e615a"),
-            False,
-        ),
-        (
-            "bob",
-            "password",
-            "https://firstpass.com",
-            Token(access_token="fake token", token_type="bearer"),
-            UserGet(username="bob", blob_id="e2f2f1b7-83e9-4677-9438-8123445e615a"),
-            True,
         ),
     ],
 )
@@ -231,26 +222,50 @@ def test_cloud_vault_init(
     host: str,
     token: Token,
     user_get: UserGet,
-    specify_access_token_in_init: bool,
 ) -> None:
     with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
         mock_api_instance = mock_client.DefaultApi.return_value
-        mock_api_instance.token_token_post.return_value = (
-            token if not specify_access_token_in_init else None
-        )
+        mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get
-        if specify_access_token_in_init:
-            cloud_vault = CloudVault(username, password, host, token.access_token)
-        else:
-            cloud_vault = CloudVault(username, password, host, None)
+        cloud_vault = CloudVault(username, password, host, token.access_token)
         assert cloud_vault.username == username
         assert cloud_vault.host == host
         assert cloud_vault.configuration.access_token == token.access_token
         assert cloud_vault.blob_id == user_get.blob_id
-        if not specify_access_token_in_init:
-            mock_api_instance.token_token_post.assert_called_with(
-                username=username, password=Vault.hash_password(password)
-            )
+        mock_api_instance.get_user_user_get.assert_called()
+
+
+@pytest.mark.parametrize(
+    "username, password, host, token, user_get",
+    [
+        (
+            "bob",
+            "password",
+            "https://firstpass.com",
+            Token(access_token="fake token", token_type="bearer"),
+            UserGet(username="bob", blob_id="e2f2f1b7-83e9-4677-9438-8123445e615a"),
+        ),
+    ],
+)
+def test_cloud_vault_init_no_access_token_in_init(
+    username: str,
+    password: str,
+    host: str,
+    token: Token,
+    user_get: UserGet,
+) -> None:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
+        mock_api_instance = mock_client.DefaultApi.return_value
+        mock_api_instance.token_token_post.return_value = token
+        mock_api_instance.get_user_user_get.return_value = user_get
+        cloud_vault = CloudVault(username, password, host, None)
+        assert cloud_vault.username == username
+        assert cloud_vault.host == host
+        assert cloud_vault.configuration.access_token == token.access_token
+        assert cloud_vault.blob_id == user_get.blob_id
+        mock_api_instance.token_token_post.assert_called_with(
+            username=username, password=Vault.hash_password(password)
+        )
         mock_api_instance.get_user_user_get.assert_called()
 
 
