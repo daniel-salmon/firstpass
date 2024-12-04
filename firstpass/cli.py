@@ -20,6 +20,7 @@ from .utils import (
     Vault,
     VaultInvalidUsernameOrPasswordError,
     VaultUnavailableError,
+    VaultUsernameAlreadyExistsError,
     get_name_from_secrets_type,
     update_config,
 )
