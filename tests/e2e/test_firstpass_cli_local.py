@@ -88,7 +88,7 @@ def test_config_list_keys(
     if want_exit_code != 0:
         return
     output = result.stdout.strip()
-    got = set(output.split("\n"))
+    got = set(output.splitlines())
     assert got == config_test.config.list_keys()
 
 
@@ -176,7 +176,7 @@ def test_vault_list_parts(
         command_input=None,
         want_exit_code=0,
     )
-    got_keys = result.stdout.strip().split("\n")
+    got_keys = result.stdout.strip().splitlines()
     assert len(got_keys) == len(want_keys)
     assert set(got_keys) == want_keys
 
@@ -272,7 +272,7 @@ def test_vault_list_names(
         password=config_test.password, file=config_test.config.vault_file
     )
     want_names = vault.list_names(secrets_type)
-    output = result.stdout.strip().split("\n")
+    output = result.stdout.strip().splitlines()
     # Remove the Password: prompt
     output.pop(0)
     assert len(output) == len(want_names)
@@ -585,7 +585,7 @@ def test_vault_get(
     vault = LocalVault(
         password=config_test.password, file=config_test.config.vault_file
     )
-    output = result.stdout.strip().split("\n")
+    output = result.stdout.strip().splitlines()
     # Remove the Password: prompt
     output.pop(0)
     if secret_part == SecretPart.all:

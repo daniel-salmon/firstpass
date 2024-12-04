@@ -231,7 +231,7 @@ def test_vault_list_names(
         access_token=None,
     )
     want_names = vault.list_names(secrets_type)
-    output = result.stdout.strip().split("\n")
+    output = result.stdout.strip().splitlines()
     # Remove the Password: prompt
     output.pop(0)
     assert len(output) == len(want_names)
@@ -381,7 +381,7 @@ def test_vault_get(
         host=cloud_test.config.cloud_host,
         access_token=None,
     )
-    output = result.stdout.strip().split("\n")
+    output = result.stdout.strip().splitlines()
     # Remove the Password: prompt
     output.pop(0)
     if secret_part == SecretPart.all:
