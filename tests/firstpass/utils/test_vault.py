@@ -5,16 +5,23 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from firstpass_client import ApiException, Blob, Token, UserGet
+from firstpass_client import ApiException, Blob, Token, UserCreate, UserGet
 from firstpass_client.exceptions import UnauthorizedException
 from pydantic import SecretStr
 
-from firstpass.lib.exceptions import (
+from firstpass.utils import (
+    CloudVault,
+    LocalVault,
+    MemoryVault,
+    Password,
+    Secret,
+    Secrets,
+    SecretsType,
+    Vault,
     VaultInvalidUsernameOrPasswordError,
     VaultUnavailableError,
+    VaultUsernameAlreadyExistsError,
 )
-from firstpass.lib.vault import CloudVault, LocalVault, MemoryVault, Vault
-from firstpass.lib.secrets import Secret, Secrets, Password, SecretsType
 
 
 @dataclass
@@ -187,6 +194,16 @@ def test_local_vault(
     assert vault.get(secrets_type, name) is None
 
 
+def test_local_vault_remove(tmp_path: Path) -> None:
+    vault_file = tmp_path / "vault"
+    vault = LocalVault(password="password", file=vault_file)
+    assert vault_file.exists()
+    assert vault_file.stat().st_size > 0
+    assert vault.can_open()
+    vault.remove()
+    assert not vault_file.exists()
+
+
 @pytest.mark.parametrize(
     "username, password, host, token, user_get",
     [
@@ -196,17 +213,52 @@ def test_local_vault(
             "https://firstpass.com",
             Token(access_token="fake token", token_type="bearer"),
             UserGet(username="bob", blob_id="e2f2f1b7-83e9-4677-9438-8123445e615a"),
-        )
+        ),
     ],
 )
 def test_cloud_vault_init(
-    username: str, password: str, host: str, token: Token, user_get: UserGet
+    username: str,
+    password: str,
+    host: str,
+    token: Token,
+    user_get: UserGet,
 ) -> None:
-    with patch("firstpass.lib.vault.firstpass_client", autospec=True) as mock_client:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get
-        cloud_vault = CloudVault(username, password, host)
+        cloud_vault = CloudVault(username, password, host, token.access_token)
+        assert cloud_vault.username == username
+        assert cloud_vault.host == host
+        assert cloud_vault.configuration.access_token == token.access_token
+        assert cloud_vault.blob_id == user_get.blob_id
+        mock_api_instance.get_user_user_get.assert_called()
+
+
+@pytest.mark.parametrize(
+    "username, password, host, token, user_get",
+    [
+        (
+            "bob",
+            "password",
+            "https://firstpass.com",
+            Token(access_token="fake token", token_type="bearer"),
+            UserGet(username="bob", blob_id="e2f2f1b7-83e9-4677-9438-8123445e615a"),
+        ),
+    ],
+)
+def test_cloud_vault_init_no_access_token_in_init(
+    username: str,
+    password: str,
+    host: str,
+    token: Token,
+    user_get: UserGet,
+) -> None:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
+        mock_api_instance = mock_client.DefaultApi.return_value
+        mock_api_instance.token_token_post.return_value = token
+        mock_api_instance.get_user_user_get.return_value = user_get
+        cloud_vault = CloudVault(username, password, host, None)
         assert cloud_vault.username == username
         assert cloud_vault.host == host
         assert cloud_vault.configuration.access_token == token.access_token
@@ -232,11 +284,11 @@ def test_cloud_vault_init(
 def test_cloud_vault_init_username_or_password_incorrect(
     username: str, password: str, host: str, token: Token, user_get: UserGet
 ) -> None:
-    with patch("firstpass.lib.vault.firstpass_client", autospec=True) as mock_client:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.side_effect = UnauthorizedException
         with pytest.raises(VaultInvalidUsernameOrPasswordError):
-            _ = CloudVault(username, password, host)
+            _ = CloudVault(username, password, host, None)
 
 
 @pytest.mark.parametrize(
@@ -254,11 +306,72 @@ def test_cloud_vault_init_username_or_password_incorrect(
 def test_cloud_vault_init_generic_error(
     username: str, password: str, host: str, token: Token, user_get: UserGet
 ) -> None:
-    with patch("firstpass.lib.vault.firstpass_client", autospec=True) as mock_client:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.side_effect = ApiException
         with pytest.raises(VaultUnavailableError):
-            _ = CloudVault(username, password, host)
+            _ = CloudVault(username, password, host, None)
+
+
+@pytest.mark.parametrize(
+    "username, password, host, token",
+    [
+        ("bob", "password", "http://example.com", Token(access_token="access token")),
+        (
+            "tuna",
+            "randompass",
+            "http://example.com",
+            Token(access_token="access token"),
+        ),
+    ],
+)
+def test_cloud_vault_create_new_user(
+    username: str, password: str, host: str, token: Token
+) -> None:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
+        mock_api_instance = mock_client.DefaultApi.return_value
+        mock_api_instance.post_user_user_post.return_value = token
+        got_token = CloudVault.create_new_user(
+            username=username, password=password, host=host
+        )
+        assert got_token == token
+        mock_api_instance.post_user_user_post.assert_called
+
+
+@pytest.mark.parametrize(
+    "username, password, host",
+    [
+        ("bob", "password", "http://example.com"),
+    ],
+)
+def test_cloud_vault_create_new_user_username_already_exists_error(
+    username: str, password: str, host: str
+) -> None:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
+        mock_api_instance = mock_client.DefaultApi.return_value
+        mock_api_instance.post_user_user_post.side_effect = ApiException(status=409)
+        with pytest.raises(VaultUsernameAlreadyExistsError):
+            _ = CloudVault.create_new_user(
+                username=username, password=password, host=host
+            )
+
+
+@pytest.mark.parametrize(
+    "username, password, host",
+    [
+        ("bob", "password", "http://example.com"),
+    ],
+)
+def test_cloud_vault_create_new_user_generic_error(
+    username: str, password: str, host: str
+) -> None:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
+        mock_api_instance = mock_client.DefaultApi.return_value
+        mock_api_instance.post_user_user_post.side_effect = ApiException
+        with pytest.raises(VaultUnavailableError):
+            _ = CloudVault.create_new_user(
+                username=username, password=password, host=host
+            )
 
 
 @pytest.mark.parametrize(
@@ -282,11 +395,11 @@ def test_cloud_vault_fetch_secrets(
     user_get: UserGet,
     secrets: Secrets,
 ) -> None:
-    with patch("firstpass.lib.vault.firstpass_client", autospec=True) as mock_client:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get
-        cloud_vault = CloudVault(username, password, host)
+        cloud_vault = CloudVault(username, password, host, None)
         want_blob_blob = base64.b64encode(
             cloud_vault.encrypt(secrets.serialize())
         ).decode("utf-8")
@@ -317,11 +430,11 @@ def test_cloud_vault_fetch_secrets_generic_error(
     token: Token,
     user_get: UserGet,
 ) -> None:
-    with patch("firstpass.lib.vault.firstpass_client", autospec=True) as mock_client:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get
-        cloud_vault = CloudVault(username, password, host)
+        cloud_vault = CloudVault(username, password, host, None)
         mock_api_instance.get_blob_blob_blob_id_get.side_effect = ApiException
         with pytest.raises(VaultUnavailableError):
             _ = cloud_vault.fetch_secrets()
@@ -348,11 +461,11 @@ def test_cloud_vault_write_secrets(
     user_get: UserGet,
     secrets: Secrets,
 ) -> None:
-    with patch("firstpass.lib.vault.firstpass_client", autospec=True) as mock_client:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get
-        cloud_vault = CloudVault(username, password, host)
+        cloud_vault = CloudVault(username, password, host, None)
         cloud_vault.write_secrets(secrets)
         mock_api_instance.put_blob_blob_blob_id_put.assert_called()
 
@@ -378,11 +491,65 @@ def test_cloud_vault_write_secrets_generic_error(
     user_get: UserGet,
     secrets: Secrets,
 ) -> None:
-    with patch("firstpass.lib.vault.firstpass_client", autospec=True) as mock_client:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
         mock_api_instance = mock_client.DefaultApi.return_value
         mock_api_instance.token_token_post.return_value = token
         mock_api_instance.get_user_user_get.return_value = user_get
-        cloud_vault = CloudVault(username, password, host)
+        cloud_vault = CloudVault(username, password, host, None)
         mock_api_instance.put_blob_blob_blob_id_put.side_effect = ApiException
         with pytest.raises(VaultUnavailableError):
             cloud_vault.write_secrets(secrets)
+
+
+@pytest.mark.parametrize(
+    "username, password, host",
+    [
+        ("bob", "password", "http://example.com"),
+    ],
+)
+def test_cloud_vault_remove(username: str, password: str, host: str) -> None:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
+        mock_api_instance = mock_client.DefaultApi.return_value
+        cloud_vault = CloudVault(
+            username=username, password=password, host=host, access_token=None
+        )
+        cloud_vault.remove()
+        mock_api_instance.delete_user_user_delete.assert_called()
+
+
+@pytest.mark.parametrize(
+    "username, password, host",
+    [
+        ("bob", "password", "http://example.com"),
+    ],
+)
+def test_cloud_vault_remove_unauthorized_error(
+    username: str, password: str, host: str
+) -> None:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
+        mock_api_instance = mock_client.DefaultApi.return_value
+        mock_api_instance.delete_user_user_delete.side_effect = UnauthorizedException
+        cloud_vault = CloudVault(
+            username=username, password=password, host=host, access_token=None
+        )
+        with pytest.raises(VaultInvalidUsernameOrPasswordError):
+            cloud_vault.remove()
+
+
+@pytest.mark.parametrize(
+    "username, password, host",
+    [
+        ("bob", "password", "http://example.com"),
+    ],
+)
+def test_cloud_vault_remove_generic_error(
+    username: str, password: str, host: str
+) -> None:
+    with patch("firstpass.utils.vault.firstpass_client", autospec=True) as mock_client:
+        mock_api_instance = mock_client.DefaultApi.return_value
+        mock_api_instance.delete_user_user_delete.side_effect = ApiException
+        cloud_vault = CloudVault(
+            username=username, password=password, host=host, access_token=None
+        )
+        with pytest.raises(VaultUnavailableError):
+            cloud_vault.remove()

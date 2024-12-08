@@ -1,12 +1,16 @@
-import pytest
-
 import firstpass_client
+import pytest
 from pydantic import BaseModel, SecretStr
 
-from firstpass.lib.exceptions import VaultInvalidUsernameOrPasswordError
-from firstpass.lib.secrets import Password, Secret, Secrets, SecretsType
-from firstpass.lib.vault import CloudVault, Vault
-
+from firstpass.utils import (
+    CloudVault,
+    Password,
+    Secret,
+    Secrets,
+    SecretsType,
+    Vault,
+    VaultInvalidUsernameOrPasswordError,
+)
 
 HOST = "http://localhost:8000"
 
@@ -37,7 +41,10 @@ def init_user(user: User) -> None:
         configuration.access_token = token.access_token
         # Set up the user's vault if it doesn't already exist
         cloud_vault = CloudVault(
-            username=user.username, password=user.password, host=user.host
+            username=user.username,
+            password=user.password,
+            host=user.host,
+            access_token=None,
         )
         try:
             _ = cloud_vault.fetch_secrets()
@@ -86,7 +93,12 @@ def test_cloud_vault(
     request: pytest.FixtureRequest,
 ) -> None:
     user = request.getfixturevalue(user_str)
-    vault = CloudVault(username=user.username, password=user.password, host=user.host)
+    vault = CloudVault(
+        username=user.username,
+        password=user.password,
+        host=user.host,
+        access_token=None,
+    )
     vault.set(secrets_type, name, secret)
     assert vault.get(secrets_type, name) == secret
     vault.delete(secrets_type, name)
@@ -101,7 +113,10 @@ def test_cloud_vault_wrong_password(user_str: str, request: pytest.FixtureReques
     user = request.getfixturevalue(user_str)
     with pytest.raises(VaultInvalidUsernameOrPasswordError):
         _ = CloudVault(
-            username=user.username, password=user.password + "extra", host=user.host
+            username=user.username,
+            password=user.password + "extra",
+            host=user.host,
+            access_token=None,
         )
 
 
@@ -111,4 +126,6 @@ def test_cloud_vault_wrong_password(user_str: str, request: pytest.FixtureReques
 )
 def test_cloud_vault_invalid_username(username: str):
     with pytest.raises(VaultInvalidUsernameOrPasswordError):
-        _ = CloudVault(username=username, password="password", host=HOST)
+        _ = CloudVault(
+            username=username, password="password", host=HOST, access_token=None
+        )

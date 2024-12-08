@@ -5,18 +5,19 @@ from functools import cached_property
 from pathlib import Path
 
 import firstpass_client
-from firstpass_client import ApiException, Blob
-from firstpass_client.exceptions import UnauthorizedException
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from firstpass_client import ApiException, Blob
+from firstpass_client.exceptions import UnauthorizedException
 
-from .secrets import Secret, Secrets, SecretsType
 from .exceptions import (
     VaultInvalidUsernameOrPasswordError,
     VaultUnavailableError,
     VaultUndecryptableError,
+    VaultUsernameAlreadyExistsError,
 )
+from .secrets import Secret, Secrets, SecretsType
 
 SALT_SIZE_BYTES = 16
 PBKDF2_ITERATIONS = 600_000
@@ -124,6 +125,10 @@ class Vault(ABC):
     def write_secrets(self, secrets: Secrets) -> None:
         pass
 
+    @abstractmethod
+    def remove(self) -> None:
+        pass
+
 
 class MemoryVault(Vault):
     def __init__(self, password) -> None:
@@ -136,6 +141,9 @@ class MemoryVault(Vault):
     def write_secrets(self, secrets: Secrets) -> None:
         self.blob = self.encrypt(secrets.serialize())
 
+    def remove(self) -> None:
+        pass
+
 
 class LocalVault(Vault):
     def __init__(self, password: str, file: Path) -> None:
@@ -147,8 +155,7 @@ class LocalVault(Vault):
     def setup_local_vault(self, secrets: Secrets | None = None) -> None:
         if secrets is None:
             secrets = Secrets()
-        with open(self.file, "wb") as f:
-            f.write(self.encrypt(secrets.serialize()))
+        self.write_secrets(secrets)
 
     def fetch_secrets(self) -> Secrets:
         with open(self.file, "rb") as f:
@@ -159,14 +166,25 @@ class LocalVault(Vault):
         with open(self.file, "wb") as f:
             f.write(self.encrypt(secrets.serialize()))
 
+    def remove(self) -> None:
+        try:
+            self.file.unlink()
+        except FileNotFoundError:
+            pass
+
 
 class CloudVault(Vault):
-    def __init__(self, username: str, password: str, host: str) -> None:
+    def __init__(
+        self, username: str, password: str, host: str, access_token: str | None
+    ) -> None:
         super().__init__(password)
         self.username = username
         self.host = host
         self.configuration = firstpass_client.Configuration(host=host)
-        self.configuration.access_token = self._get_token()
+        if access_token is None:
+            self.configuration.access_token = self._get_token()
+        else:
+            self.configuration.access_token = access_token
         self.blob_id = self._get_blob_id()
 
     def _get_token(self) -> str:
@@ -193,6 +211,26 @@ class CloudVault(Vault):
                 raise VaultUnavailableError
         return user_get.blob_id
 
+    @staticmethod
+    def create_new_user(
+        username: str, password: str, host: str
+    ) -> firstpass_client.Token:
+        # Hash the password so that the plaintext password never leaves the client
+        hashed_password = Vault.hash_password(password)
+        user_create = firstpass_client.UserCreate(
+            username=username, password=hashed_password
+        )
+        configuration = firstpass_client.Configuration(host=host)
+        with firstpass_client.ApiClient(configuration) as api_client:
+            api_instance = firstpass_client.DefaultApi(api_client)
+            try:
+                token = api_instance.post_user_user_post(user_create)
+            except ApiException as e:
+                if e.status == 409:
+                    raise VaultUsernameAlreadyExistsError
+                raise VaultUnavailableError
+        return token
+
     def fetch_secrets(self) -> Secrets:
         with firstpass_client.ApiClient(self.configuration) as api_client:
             api_instance = firstpass_client.DefaultApi(api_client)
@@ -215,4 +253,14 @@ class CloudVault(Vault):
                     blob_id=self.blob_id, blob=blob
                 )
             except ApiException:
+                raise VaultUnavailableError
+
+    def remove(self) -> None:
+        with firstpass_client.ApiClient(self.configuration) as api_client:
+            api_instance = firstpass_client.DefaultApi(api_client)
+            try:
+                api_instance.delete_user_user_delete()
+            except UnauthorizedException:
+                raise VaultInvalidUsernameOrPasswordError
+            except ApiException as e:
                 raise VaultUnavailableError

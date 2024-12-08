@@ -1,15 +1,29 @@
 from pathlib import Path
 from typing import Annotated, TypedDict
 
+import firstpass_client
 import pyperclip
 import typer
 from pydantic import SecretStr, ValidationError
 
-from . import __version__, name as app_name
-from .lib.config import Config, update_config
-from .lib.exceptions import ConfigKeyDoesNotExistError, ConfigValidationError
-from .lib.secrets import SecretPart, SecretsType, get_name_from_secrets_type
-from .lib.vault import LocalVault, Vault
+from . import __version__
+from . import name as app_name
+from .utils import (
+    CloudVault,
+    Config,
+    ConfigKeyDoesNotExistError,
+    ConfigValidationError,
+    LocalVault,
+    SecretPart,
+    Secrets,
+    SecretsType,
+    Vault,
+    VaultInvalidUsernameOrPasswordError,
+    VaultUnavailableError,
+    VaultUsernameAlreadyExistsError,
+    get_name_from_secrets_type,
+    update_config,
+)
 
 State = TypedDict(
     "State",
@@ -53,12 +67,30 @@ def password_check(password: str) -> str:
     config = state.get("config")
     if config is None:
         raise AssertionError("config is None")
-    if not config.vault_file.exists():
-        print(f"No vault exists at {config.vault_file}. Create one with vault init")
-        raise typer.Exit(1)
-    vault = LocalVault(password, config.vault_file)
-    if not vault.can_open():
-        raise typer.BadParameter("Invalid password")
+    vault: Vault
+    if config.local:
+        if not config.vault_file.exists():
+            print(f"No vault exists at {config.vault_file}. Create one with vault init")
+            raise typer.Exit(1)
+        vault = LocalVault(password, config.vault_file)
+        if not vault.can_open():
+            raise typer.BadParameter("Invalid password")
+    else:
+        try:
+            vault = CloudVault(
+                username=config.username,
+                password=password,
+                host=config.cloud_host,
+                access_token=None,
+            )
+        except VaultInvalidUsernameOrPasswordError:
+            print(
+                "Invalid username or password. Have you initialized a vault before? If not run `vault init`. Otherwise, this is likely a problem with your password."
+            )
+            raise typer.Exit(1)
+        except VaultUnavailableError:
+            print("There seems to be an issue, try that again")
+            raise typer.Exit(1)
     state["vault"] = vault
     return password
 
@@ -151,9 +183,18 @@ def vault_init():
     config = state.get("config")
     if config is None:
         raise AssertionError("config is None")
-    if config.vault_file.exists():
+    if config.local and config.vault_file.exists():
         print(f"Nothing to initialize, a vault already exists at {config.vault_file}")
         raise typer.Exit(1)
+    if not config.local:
+        username_correct = typer.confirm(
+            f"Please confirm your username: {config.username}"
+        )
+        if not username_correct:
+            print(
+                "Please set your username with `config set username <desired username>`"
+            )
+            raise typer.Abort()
     password1 = typer.prompt(
         "Please enter your new firstpass password", hide_input=True
     )
@@ -163,9 +204,33 @@ def vault_init():
     if password1 != password2:
         print("Passwords do not match, try again")
         raise typer.Abort()
-    config.vault_file.parent.mkdir(exist_ok=True, parents=True)
-    config.vault_file.touch(exist_ok=True)
-    LocalVault(password1, config.vault_file)
+    password = password1
+    if config.local:
+        config.vault_file.parent.mkdir(exist_ok=True, parents=True)
+        config.vault_file.touch(exist_ok=True)
+        LocalVault(password, config.vault_file)
+        print("Successfully initialized vault!")
+        raise typer.Exit()
+    try:
+        token = CloudVault.create_new_user(
+            username=config.username, password=password1, host=config.cloud_host
+        )
+        vault = CloudVault(
+            username=config.username,
+            password=password,
+            host=config.cloud_host,
+            access_token=token.access_token,
+        )
+        vault.write_secrets(Secrets())
+    except VaultUsernameAlreadyExistsError:
+        print(
+            "Username already exists. Please set a new username with `config set username <desired username>`"
+        )
+        raise typer.Exit(1)
+    except VaultUnavailableError:
+        print("There seems to be an issue, try that again")
+        raise typer.Exit(1)
+    print("Successfully intialized vault!")
 
 
 @vault_app.command(name="remove")
@@ -174,18 +239,21 @@ def vault_remove(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
-    config = state.get("config")
+    config, vault = state.get("config"), state.get("vault")
     if config is None:
         raise AssertionError("config is None")
+    if vault is None:
+        raise AssertionError("vault is None")
     delete = typer.confirm(
-        f"Are you sure you want to delete your vault at {config.vault_file}?"
+        f"Are you sure you want to delete your vault {'at ' + str(config.vault_file) if config.local else ''}?"
     )
     if not delete:
         raise typer.Abort()
     try:
-        config.vault_file.unlink()
-    except FileNotFoundError:
-        pass
+        vault.remove()
+    except VaultUnavailableError:
+        print("There seems to be an issue, try that again")
+        raise typer.Exit(1)
     print("Vault successfully removed")
 
 
