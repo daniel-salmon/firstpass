@@ -19,7 +19,7 @@ dependencies = [
 firstpass = "firstpass.__main__:app"
 
 [tool.setuptools]
-packages = ["firstpass"]
+packages = ["firstpass", "firstpass.utils"]
 
 [tool.uv]
 package = true
