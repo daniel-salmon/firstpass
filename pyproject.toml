@@ -32,4 +32,4 @@ dev-dependencies = [
 ]
 
 [tool.uv.sources]
-firstpass-client = { git = "https://github.com/daniel-salmon/firstpass-client", rev = "6d07c30" }
+firstpass-client = { git = "https://github.com/daniel-salmon/firstpass-client", rev = "cdb54bb" }
