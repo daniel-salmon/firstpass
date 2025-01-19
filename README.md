@@ -1,7 +1,8 @@
 # firstpass
 
-firstpass is a command line utility that helps you manage your secrets. It
-supports the ability to store your secrets locally or in the cloud.
+firstpass is a command line utility that helps you manage your secrets, similar
+to 1Password and LastPass. It supports the ability to store your secrets
+locally or in the cloud.
 
 # Table of Contents
 
