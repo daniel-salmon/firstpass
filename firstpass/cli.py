@@ -98,9 +98,9 @@ app = typer.Typer()
 init_app = typer.Typer()
 config_app = typer.Typer(callback=load_config)
 vault_app = typer.Typer(callback=load_config)
-app.add_typer(init_app, name="init")
-app.add_typer(config_app, name="config")
-app.add_typer(vault_app, name="vault")
+app.add_typer(init_app, name="init", help="Initialize a new config.")
+app.add_typer(config_app, name="config", help="Manage a config.")
+app.add_typer(vault_app, name="vault", help="Manage your vault.")
 
 
 @app.command()
@@ -112,6 +112,9 @@ def version():
 def init_config(
     config_path: Annotated[Path | None, typer.Option(help="Path to config")] = None,
 ):
+    """
+    Initialize a new config.
+    """
     if config_path is None:
         config_path = default_config_path
     if config_path.exists() and config_path.stat().st_size > 0:
@@ -131,6 +134,9 @@ def init_config(
 
 @config_app.command(name="list-keys")
 def config_list_keys():
+    """
+    List options available to customize in your config.
+    """
     config = state.get("config")
     if config is None:
         raise AssertionError("config is None")
@@ -139,6 +145,9 @@ def config_list_keys():
 
 @config_app.command(name="get")
 def config_get(key: str):
+    """
+    Get an option from your config.
+    """
     config = state.get("config")
     if config is None:
         raise AssertionError("config is None")
@@ -152,6 +161,9 @@ def config_get(key: str):
 
 @config_app.command(name="set")
 def config_set(key: str, value: str):
+    """
+    Set an option in your config.
+    """
     config = state.get("config")
     config_path = state.get("config_path")
     if config is None:
@@ -173,12 +185,21 @@ def config_set(key: str, value: str):
 
 @vault_app.command(name="list-parts")
 def vault_list_parts(secrets_type: SecretsType):
+    """
+    List the parts of the given type of secret.
+    """
     secrets_name = get_name_from_secrets_type(secrets_type)
     print("\n".join(sorted(secrets_name.list_parts())))
 
 
 @vault_app.command(name="init")
 def vault_init():
+    """
+    Initialize a new vault.
+
+    You should only run this the first time you want to create a vault after
+    initializing a new config for your profile.
+    """
     config = state.get("config")
     if config is None:
         raise AssertionError("config is None")
@@ -238,6 +259,9 @@ def vault_remove(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
+    """
+    Remove your vault.
+    """
     config, vault = state.get("config"), state.get("vault")
     if config is None:
         raise AssertionError("config is None")
@@ -263,6 +287,9 @@ def vault_new(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
+    """
+    Create a new secret / entry for your vault.
+    """
     vault = state.get("vault")
     if vault is None:
         raise AssertionError("vault is None")
@@ -304,6 +331,9 @@ def vault_list_names(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
+    """
+    List the names of all of your secrets.
+    """
     vault = state.get("vault")
     if vault is None:
         raise AssertionError("vault is None")
@@ -321,6 +351,9 @@ def vault_get(
     show: bool = False,
     copy: bool = False,
 ):
+    """
+    Get a secret by name from your vault.
+    """
     vault = state.get("vault")
     if vault is None:
         raise AssertionError("vault is None")
@@ -358,6 +391,9 @@ def vault_set(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
+    """
+    Set the value for a secret.
+    """
     vault = state.get("vault")
     if vault is None:
         raise AssertionError("vault is None")
@@ -387,6 +423,9 @@ def vault_delete(
         str, typer.Option(prompt=True, hide_input=True, callback=password_check)
     ],
 ):
+    """
+    Delete a secret from your vault.
+    """
     vault = state.get("vault")
     if vault is None:
         raise AssertionError("vault is None")
