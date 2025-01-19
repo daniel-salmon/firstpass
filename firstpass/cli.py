@@ -305,7 +305,7 @@ def vault_new(
     if "password" in fields:
         while True:
             password1 = typer.prompt("Enter the password", hide_input=True)
-            password2 = typer.prompt("Reenter the password", hide_input=True)
+            password2 = typer.prompt("Re-enter the password", hide_input=True)
             if password1 == password2:
                 break
             print("Passwords do not match!")
