@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Annotated, TypedDict
 
-import firstpass_client
 import pyperclip
 import typer
 from pydantic import SecretStr, ValidationError

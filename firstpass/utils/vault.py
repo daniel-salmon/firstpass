@@ -262,5 +262,5 @@ class CloudVault(Vault):
                 api_instance.delete_user_user_delete()
             except UnauthorizedException:
                 raise VaultInvalidUsernameOrPasswordError
-            except ApiException as e:
+            except ApiException:
                 raise VaultUnavailableError

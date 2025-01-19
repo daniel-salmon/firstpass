@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from firstpass_client import ApiException, Blob, Token, UserCreate, UserGet
+from firstpass_client import ApiException, Blob, Token, UserGet
 from firstpass_client.exceptions import UnauthorizedException
 from pydantic import SecretStr
 
