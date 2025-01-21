@@ -189,7 +189,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cryptography", specifier = ">=43.0.3" },
-    { name = "firstpass-client", git = "https://github.com/daniel-salmon/firstpass-client?rev=6d07c30" },
+    { name = "firstpass-client", git = "https://github.com/daniel-salmon/firstpass-client?rev=cdb54bb" },
     { name = "pyaml", specifier = ">=24.9.0" },
     { name = "pydantic", specifier = ">=2.9.2" },
     { name = "pydantic-settings", specifier = ">=2.6.0" },
@@ -210,7 +210,7 @@ dev = [
 [[package]]
 name = "firstpass-client"
 version = "0.1.0"
-source = { git = "https://github.com/daniel-salmon/firstpass-client?rev=6d07c30#6d07c30c62582518df9c1ee75506c9a8a8ef55e6" }
+source = { git = "https://github.com/daniel-salmon/firstpass-client?rev=cdb54bb#cdb54bb7d80228994d5ac2aae5f64d342b774055" }
 dependencies = [
     { name = "pydantic" },
     { name = "python-dateutil" },

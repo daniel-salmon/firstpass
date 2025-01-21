@@ -24,9 +24,6 @@ jobs:
       - name: Set up Python
         run: uv python install
 
-      - name: Install firstpass-client from private repo
-        run: uv add git+https://${{ secrets.CLIENT_REPO_TOKEN }}@github.com/daniel-salmon/firstpass-client --branch main
-
       - name: Install the project
         run: uv sync --all-extras --dev
 

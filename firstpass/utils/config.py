@@ -9,7 +9,7 @@ from .exceptions import ConfigKeyDoesNotExistError, ConfigValidationError
 
 
 class Config(BaseModel):
-    cloud_host: str = "http://localhost:8000"
+    cloud_host: str = "https://firstpass-566616439eba.herokuapp.com"
     local: bool = False
     username: str = "username"
     vault_file: Path = Path.home() / Path(".firstpass/vault")
